@@ -41,8 +41,20 @@ public class MIPSsims {
 	}
 
 	private static void ProcessCategory3(long word) {
-		// TODO Auto-generated method stub
+		long rs, rt, iv;
+		Category3OPS op;
+		rs = ((word >> 24) & 0b11111);
+		rt = (word >> 19) & 0b11111;
+		op = Category3OPS.fromByte((int) ((word >> 16) & 0b111));
+		iv = (word & 0b1111111111111111);
+		String disassembly = Long.toBinaryString(word) + "\t" + memorylocation + "\t" + op.toString() + " "
+				+ RegisterName(rt) + ", " + RegisterName(rs) + ", " + ImmediateValue(iv);
+		System.out.println(disassembly);
+		disassemblyOutput.add(disassembly);
+	}
 
+	private static String ImmediateValue(long iv) {
+		return "#" + iv;
 	}
 
 	private static void ProcessCategory2(long word) {
@@ -53,10 +65,10 @@ public class MIPSsims {
 		op = Category2OPS.fromByte((int) ((word >> 16) & 0b111));
 		rd = ((word >> 11) & 0b11111);
 
-		String disassembely = Long.toBinaryString(word) + "\t" + memorylocation + "\t" + op.toString() + " "
+		String disassembly = Long.toBinaryString(word) + "\t" + memorylocation + "\t" + op.toString() + " "
 				+ RegisterName(rd) + ", " + RegisterName(rs) + ", " + RegisterName(rt);
-		System.out.println(disassembely);
-		disassemblyOutput.add(disassembely);
+		System.out.println(disassembly);
+		disassemblyOutput.add(disassembly);
 	}
 
 	private static String RegisterName(long rd) {
@@ -64,8 +76,15 @@ public class MIPSsims {
 	}
 
 	private static void ProcessCategory1(long word) {
-		// TODO Auto-generated method stub
-
+		/*
+		 * long rs, rt, rd; Category1OPS op; op = Category1OPS.fromByte((int)
+		 * ((word >> 16) & 0b111)); rd = ((word >> 11) & 0b11111);
+		 * 
+		 * String disassembly = Long.toBinaryString(word) + "\t" +
+		 * memorylocation + "\t" + op.toString() + " " + RegisterName(rd) + ", "
+		 * + RegisterName(rs) + ", " + RegisterName(rt);
+		 * System.out.println(disassembly); disassemblyOutput.add(disassembly);
+		 */
 	}
 
 	private static Category GetCategory(Long word) {
@@ -114,6 +133,28 @@ public class MIPSsims {
 		category1, category2, category3;
 	}
 
+	enum Category1OPS {
+
+		J(0b000), BEQ(0b010), BGTZ(0b100), BREAK(0b101), SW(0b110), LW(0b111);
+		private int numVal;
+
+		Category1OPS(int numVal) {
+			this.numVal = numVal;
+		}
+
+		public static Category1OPS fromByte(int val) {
+			for (Category1OPS cat : values()) {
+				if (cat.numVal == val)
+					return cat;
+			}
+			return null;
+		}
+
+		public int getNumVal() {
+			return numVal;
+		}
+	}
+
 	enum Category2OPS {
 		ADD(0b000), SUB(0b001), MUL(0b010), AND(0b011), OR(0b100), XOR(0b101), NOR(0b110);
 		private int numVal;
@@ -136,7 +177,7 @@ public class MIPSsims {
 	}
 
 	enum Category3OPS {
-		ADD(0b000), SUB(0b001), MUL(0b010), AND(0b011), OR(0b100), XOR(0b101), NOR(0b110);
+		ADDI(0b000), ANDI(0b001), ORI(0b010), XORI(0b011);
 		private int numVal;
 
 		Category3OPS(int numVal) {
