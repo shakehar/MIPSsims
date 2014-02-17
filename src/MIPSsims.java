@@ -9,6 +9,7 @@ public class MIPSsims {
 
 	public static int memorylocation = 124;
 	public static List<String> disassemblyOutput = new ArrayList<>();
+	static boolean isBreak = false;
 
 	public static void main(String[] args) {
 
@@ -20,9 +21,29 @@ public class MIPSsims {
 	private static void DisAssembler(List<Long> input) {
 		for (Long word : input) {
 			memorylocation += 4;
-			Category cat = GetCategory(word);
-			ProcessInstructions(cat, word);
+			if (!isBreak) {
+				Category cat = GetCategory(word);
+				ProcessInstructions(cat, word);
+			} else
+				TwosComplement(word);
 		}
+	}
+
+	private static void TwosComplement(long word) {
+		String stringWord = Long.toBinaryString(word);
+
+		while (stringWord.length() < 32)
+			stringWord = "0" + stringWord;
+		String disassembly = stringWord + "\t" + memorylocation;
+		if (word >> 31 == 0) {
+			disassembly += "\t" + word;
+		} else {
+
+		}
+
+		System.out.println(disassembly);
+		disassemblyOutput.add(disassembly);
+
 	}
 
 	private static void ProcessInstructions(Category cat, long word) {
@@ -77,14 +98,19 @@ public class MIPSsims {
 
 	private static void ProcessCategory1(long word) {
 
-		long rs, rt, rd, ii;
+		long rs, rt, rd, ii, delaySlot;
 		Category1OPS op;
-		String disassembly = Long.toBinaryString(word) + "\t" + memorylocation + "\t";
+		String stringWord = Long.toBinaryString(word);
+		// ensure that length of word is 32
+		while (stringWord.length() < 32)
+			stringWord = "0" + stringWord;
+		String disassembly = stringWord + "\t" + memorylocation + "\t";
 		op = Category1OPS.fromByte((int) ((word >> 26) & 0b111));
 		switch (op) {
 		case BEQ:
 			rs = (word >> 21) & 0b11111;
 			rt = (word >> 16) & 0b11111;
+			delaySlot = (((memorylocation + 4) >> 28) << 28);
 			ii = word & 0b1111111111111111;
 			disassembly += op.toString() + " " + RegisterName(rs) + ", " + RegisterName(rt) + ", " + HashValue(ii);
 			break;
@@ -95,9 +121,12 @@ public class MIPSsims {
 			break;
 		case BREAK:
 			disassembly += op.toString();
+			isBreak = true;
 			break;
 		case J:
 			ii = (word << 2) & 0b11111111111111111111111111;
+			delaySlot = (((memorylocation + 4) >> 28) << 28);
+			ii = ii ^ delaySlot;
 			disassembly += op.toString() + " " + HashValue(ii);
 			break;
 		case LW:
@@ -144,7 +173,7 @@ public class MIPSsims {
 			br = new BufferedReader(new FileReader(filename));
 
 			while ((sCurrentLine = br.readLine()) != null) {
-				System.out.println(sCurrentLine);
+				// System.out.println(sCurrentLine);
 				Long b = Long.parseLong(sCurrentLine, 2);
 				arrays.add(b);
 			}
