@@ -48,12 +48,12 @@ public class MIPSsims {
 		op = Category3OPS.fromByte((int) ((word >> 16) & 0b111));
 		iv = (word & 0b1111111111111111);
 		String disassembly = Long.toBinaryString(word) + "\t" + memorylocation + "\t" + op.toString() + " "
-				+ RegisterName(rt) + ", " + RegisterName(rs) + ", " + ImmediateValue(iv);
+				+ RegisterName(rt) + ", " + RegisterName(rs) + ", " + HashValue(iv);
 		System.out.println(disassembly);
 		disassemblyOutput.add(disassembly);
 	}
 
-	private static String ImmediateValue(long iv) {
+	private static String HashValue(long iv) {
 		return "#" + iv;
 	}
 
@@ -76,15 +76,48 @@ public class MIPSsims {
 	}
 
 	private static void ProcessCategory1(long word) {
-		/*
-		 * long rs, rt, rd; Category1OPS op; op = Category1OPS.fromByte((int)
-		 * ((word >> 16) & 0b111)); rd = ((word >> 11) & 0b11111);
-		 * 
-		 * String disassembly = Long.toBinaryString(word) + "\t" +
-		 * memorylocation + "\t" + op.toString() + " " + RegisterName(rd) + ", "
-		 * + RegisterName(rs) + ", " + RegisterName(rt);
-		 * System.out.println(disassembly); disassemblyOutput.add(disassembly);
-		 */
+
+		long rs, rt, rd, ii;
+		Category1OPS op;
+		String disassembly = Long.toBinaryString(word) + "\t" + memorylocation + "\t";
+		op = Category1OPS.fromByte((int) ((word >> 26) & 0b111));
+		switch (op) {
+		case BEQ:
+			rs = (word >> 21) & 0b11111;
+			rt = (word >> 16) & 0b11111;
+			ii = word & 0b1111111111111111;
+			disassembly += op.toString() + " " + RegisterName(rs) + ", " + RegisterName(rt) + ", " + HashValue(ii);
+			break;
+		case BGTZ:
+			rs = (word >> 21) & 0b11111;
+			ii = word & 0b1111111111111111;
+			disassembly += op.toString() + " " + RegisterName(rs) + ", " + HashValue(ii);
+			break;
+		case BREAK:
+			disassembly += op.toString();
+			break;
+		case J:
+			ii = (word << 2) & 0b11111111111111111111111111;
+			disassembly += op.toString() + " " + HashValue(ii);
+			break;
+		case LW:
+			rs = (word >> 21) & 0b11111;
+			rt = (word >> 16) & 0b11111;
+			ii = word & 0b1111111111111111;
+			disassembly += op.toString() + " " + RegisterName(rt) + ", " + ii + "(" + RegisterName(rs) + ")";
+			break;
+		case SW:
+			rs = (word >> 21) & 0b11111;
+			rt = (word >> 16) & 0b11111;
+			ii = word & 0b1111111111111111;
+			disassembly += op.toString() + " " + RegisterName(rt) + ", " + ii + "(" + RegisterName(rs) + ")";
+			break;
+		default:
+			break;
+
+		}
+		System.out.println(disassembly);
+
 	}
 
 	private static Category GetCategory(Long word) {
