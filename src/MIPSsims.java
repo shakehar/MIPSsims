@@ -12,7 +12,7 @@ public class MIPSsims {
 	public static int breakLocation = 0;
 	public static List<String> disassemblyOutput = new ArrayList<>();
 	public static List<String> simulationOutput = new ArrayList<>();
-	public static Hashtable<Integer, Integer> registers = new Hashtable<Integer, Integer>();
+	public static Hashtable<String, Integer> registers = new Hashtable<String, Integer>();
 	public static Hashtable<Integer, Integer> memory = new Hashtable<Integer, Integer>();
 	static boolean isBreak = false;
 
@@ -22,46 +22,49 @@ public class MIPSsims {
 		DisAssembler(input);
 		InitializeRegisters();
 		InitializeMemory();
-		Simulator(disassemblyOutput);
+		SimulatorOutput(disassemblyOutput);
 	}
 
 	private static void InitializeMemory() {
+		int j = 0;
 		for (int i = breakLocation; i <= memoryLocation; i += 4) {
-			memory.put(i, 0);
+			memory.put(i, Integer.parseInt(disassemblyOutput.get(((breakLocation - 128) / 4) + j).split("\t")[2]));
+			j++;
 		}
 
 	}
 
 	private static void InitializeRegisters() {
 		for (int i = 0; i < 33; i++) {
-			registers.put(i, 0);
+			registers.put("R" + i, 0);
 		}
 	}
 
-	private static void Simulator(List<String> disassemblyOutput) {
+	private static void SimulatorOutput(List<String> disassemblyOutput) {
 		int cycle = 1;
 		boolean isInstruction = true;
-		for (String instruction : disassemblyOutput) {
+		for (String disassembly : disassemblyOutput) {
 			if (isInstruction) {
-				if (instruction.split("\t")[2].equals("BREAK")) {
+				String instruction = disassembly.split("\t")[2];
+				Decode(instruction);
+				if (instruction.equals("BREAK")) {
 					isInstruction = false;
 				}
-				String simulation = "--------------------\nCycle:" + cycle + "\t" + instruction.split("\t")[2]
-						+ "\nRegisters";
+				String simulation = "--------------------\nCycle:" + cycle + "\t" + instruction + "\nRegisters";
 				for (int i = 0; i <= 24; i += 8) {
 					String regNo = String.valueOf(i);
 					if (regNo.length() == 1)
 						regNo = "0" + regNo;
 					simulation += "\nR" + regNo + ":";
 					for (int j = i; j < i + 8; j++) {
-						simulation += "\t" + registers.get(j);
+						simulation += "\t" + registers.get("R" + j);
 					}
 				}
 				simulation += "\nData";
 				for (int i = breakLocation; i <= memoryLocation; i += 32) {
 					simulation += "\n" + i + ":";
 					for (int j = i; j < i + 32; j += 4) {
-						simulation += "\t" + memory.get(i);
+						simulation += "\t" + memory.get(j);
 					}
 				}
 				System.out.println(simulation);
@@ -70,6 +73,95 @@ public class MIPSsims {
 			}
 		}
 
+	}
+
+	private static void Decode(String instruction) {
+		String[] ins = instruction.split(" ");
+		Ops ops = Ops.valueOf(ins[0]);
+		String rd, rs, rt, iv, ii;
+		switch (ops) {
+		case ADD:
+			rd = ins[1].replace(",", "");
+			rs = ins[2].replace(",", "");
+			rt = ins[3];
+			registers.put(rt, registers.get(rd) + registers.get(rs));
+			break;
+		case ADDI:
+			rt = ins[1].replace(",", "");
+			rs = ins[2].replace(",", "");
+			iv = ins[3].replace("#", "");
+			registers.put(rt, Integer.parseInt(iv) + registers.get(rs));
+			break;
+		case AND:
+			rd = ins[1].replace(",", "");
+			rs = ins[2].replace(",", "");
+			rt = ins[3];
+			registers.put(rd, registers.get(rt) & registers.get(rs));
+			break;
+		case ANDI:
+			rt = ins[1].replace(",", "");
+			rs = ins[2].replace(",", "");
+			iv = ins[3].replace("#", "");
+			registers.put(rt, Integer.parseInt(iv) & registers.get(rs));
+			break;
+		case BEQ:
+			break;
+		case BGTZ:
+			break;
+		case BREAK:
+			break;
+		case J:
+			break;
+		case LW:
+			break;
+		case MUL:
+			rd = ins[1].replace(",", "");
+			rs = ins[2].replace(",", "");
+			rt = ins[3];
+			registers.put(rd, registers.get(rt) * registers.get(rs));
+			break;
+		case NOR:
+			rd = ins[1].replace(",", "");
+			rs = ins[2].replace(",", "");
+			rt = ins[3];
+			registers.put(rd, ~(registers.get(rt) | registers.get(rs)));
+			break;
+		case OR:
+			rd = ins[1].replace(",", "");
+			rs = ins[2].replace(",", "");
+			rt = ins[3];
+			registers.put(rd, (registers.get(rt) | registers.get(rs)));
+			break;
+		case ORI:
+			rt = ins[1].replace(",", "");
+			rs = ins[2].replace(",", "");
+			iv = ins[3].replace("#", "");
+			registers.put(rt, Integer.parseInt(iv) | registers.get(rs));
+			break;
+		case SUB:
+			rd = ins[1].replace(",", "");
+			rs = ins[2].replace(",", "");
+			rt = ins[3];
+			registers.put(rd, (registers.get(rs) - registers.get(rt)));
+			break;
+		case SW:
+			break;
+		case XOR:
+			rd = ins[1].replace(",", "");
+			rs = ins[2].replace(",", "");
+			rt = ins[3];
+			registers.put(rd, (registers.get(rs) ^ registers.get(rt)));
+			break;
+		case XORI:
+			rt = ins[1].replace(",", "");
+			rs = ins[2].replace(",", "");
+			iv = ins[3].replace("#", "");
+			registers.put(rt, Integer.parseInt(iv) ^ registers.get(rs));
+			break;
+		default:
+			break;
+
+		}
 	}
 
 	private static void DisAssembler(List<Long> input) {
@@ -179,7 +271,7 @@ public class MIPSsims {
 		case J:
 			ii = (word << 2) & 0b11111111111111111111111111;
 			delaySlot = (((memoryLocation + 4) >> 28) << 28);
-			ii = ii ^ delaySlot;
+			ii = ii | delaySlot;
 			disassembly += op.toString() + " " + HashValue(ii);
 			break;
 		case LW:
@@ -311,5 +403,9 @@ public class MIPSsims {
 		public int getNumVal() {
 			return numVal;
 		}
+	}
+
+	enum Ops {
+		J, BEQ, BGTZ, BREAK, SW, LW, ADD, SUB, MUL, AND, OR, XOR, NOR, ADDI, ANDI, ORI, XORI;
 	}
 }
