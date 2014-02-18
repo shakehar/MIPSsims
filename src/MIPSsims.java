@@ -12,7 +12,8 @@ public class MIPSsims {
 	public static int breakLocation = 0;
 	public static List<String> disassemblyOutput = new ArrayList<>();
 	public static List<String> simulationOutput = new ArrayList<>();
-	public static Hashtable registers = new Hashtable<Integer, Integer>();
+	public static Hashtable<Integer, Integer> registers = new Hashtable<Integer, Integer>();
+	public static Hashtable<Integer, Integer> memory = new Hashtable<Integer, Integer>();
 	static boolean isBreak = false;
 
 	public static void main(String[] args) {
@@ -20,15 +21,21 @@ public class MIPSsims {
 		List<Long> input = ReadFile(filename);
 		DisAssembler(input);
 		InitializeRegisters();
+		InitializeMemory();
 		Simulator(disassemblyOutput);
 	}
 
-	@SuppressWarnings("unchecked")
+	private static void InitializeMemory() {
+		for (int i = breakLocation; i <= memoryLocation; i += 4) {
+			memory.put(i, 0);
+		}
+
+	}
+
 	private static void InitializeRegisters() {
 		for (int i = 0; i < 33; i++) {
 			registers.put(i, 0);
 		}
-
 	}
 
 	private static void Simulator(List<String> disassemblyOutput) {
@@ -51,8 +58,11 @@ public class MIPSsims {
 					}
 				}
 				simulation += "\nData";
-				for (int i = breakLocation + 4; i <= memoryLocation; i += 32) {
+				for (int i = breakLocation; i <= memoryLocation; i += 32) {
 					simulation += "\n" + i + ":";
+					for (int j = i; j < i + 32; j += 4) {
+						simulation += "\t" + memory.get(i);
+					}
 				}
 				System.out.println(simulation);
 				simulationOutput.add(simulation);
@@ -164,7 +174,7 @@ public class MIPSsims {
 		case BREAK:
 			disassembly += op.toString();
 			isBreak = true;
-			breakLocation = memoryLocation;
+			breakLocation = memoryLocation + 4;
 			break;
 		case J:
 			ii = (word << 2) & 0b11111111111111111111111111;
