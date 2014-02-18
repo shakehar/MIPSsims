@@ -1,10 +1,10 @@
 /* On my honor, I have neither given nor received unauthorized aid on this assignment */
 import java.io.BufferedReader;
-import java.io.FileNotFoundException;
+import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
@@ -20,7 +20,7 @@ public class MIPSsims {
 	public static Hashtable<Integer, String> instructions = new Hashtable<Integer, String>();
 	static boolean isBreak = false;
 
-	public static void main(String[] args) throws FileNotFoundException, UnsupportedEncodingException {
+	public static void main(String[] args) throws IOException {
 		String filename = args[0];
 		List<Long> input = ReadFile(filename);
 		DisAssembler(input);
@@ -32,15 +32,16 @@ public class MIPSsims {
 		PrintFile(simulationOutput, "simulation.txt");
 	}
 
-	private static void PrintFile(List<String> output, String filename) throws FileNotFoundException,
-			UnsupportedEncodingException {
-		PrintWriter fileWriter = new PrintWriter(filename, "UTF-8");
-		for (String string : output) {
-			fileWriter.print(string + "\n");
-			fileWriter.flush();
-		}
-		fileWriter.close();
+	private static void PrintFile(List<String> output, String filename) throws IOException {
+		File file = new File(filename);
+		FileWriter fw = new FileWriter(file.getAbsoluteFile());
+		BufferedWriter bw = new BufferedWriter(fw);
 
+		for (String string : output) {
+			bw.write(string + "\n");
+		}
+
+		bw.close();
 	}
 
 	private static void InitializeInstructions() {
