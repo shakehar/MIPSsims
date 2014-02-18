@@ -1,7 +1,10 @@
 /* On my honor, I have neither given nor received unauthorized aid on this assignment */
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
@@ -14,15 +17,39 @@ public class MIPSsims {
 	public static List<String> simulationOutput = new ArrayList<>();
 	public static Hashtable<String, Integer> registers = new Hashtable<String, Integer>();
 	public static Hashtable<Integer, Integer> memory = new Hashtable<Integer, Integer>();
+	public static Hashtable<Integer, String> instructions = new Hashtable<Integer, String>();
 	static boolean isBreak = false;
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws FileNotFoundException, UnsupportedEncodingException {
 		String filename = args[0];
 		List<Long> input = ReadFile(filename);
 		DisAssembler(input);
 		InitializeRegisters();
+		InitializeInstructions();
 		InitializeMemory();
-		SimulatorOutput(disassemblyOutput);
+		Simulator();
+		PrintFile(disassemblyOutput, "disassembly.txt");
+		PrintFile(simulationOutput, "simulation.txt");
+	}
+
+	private static void PrintFile(List<String> output, String filename) throws FileNotFoundException,
+			UnsupportedEncodingException {
+		PrintWriter fileWriter = new PrintWriter(filename, "UTF-8");
+		for (String string : output) {
+			fileWriter.print(string + "\n");
+			fileWriter.flush();
+		}
+		fileWriter.close();
+
+	}
+
+	private static void InitializeInstructions() {
+		for (int i = 0; i < disassemblyOutput.size(); i++) {
+			String[] ins = disassemblyOutput.get(i).split("\t");
+			instructions.put(Integer.parseInt(ins[1]), ins[2]);
+			if (ins[2].equals("BREAK"))
+				break;
+		}
 	}
 
 	private static void InitializeMemory() {
@@ -40,42 +67,39 @@ public class MIPSsims {
 		}
 	}
 
-	private static void SimulatorOutput(List<String> disassemblyOutput) {
+	private static void Simulator() {
 		int cycle = 1;
-		boolean isInstruction = true;
-		for (String disassembly : disassemblyOutput) {
-			if (isInstruction) {
-				String instruction = disassembly.split("\t")[2];
-				Decode(instruction);
-				if (instruction.equals("BREAK")) {
-					isInstruction = false;
+		int counter = 128;
+		while (true) {
+			String instruction = instructions.get(counter);
+			String simulation = "--------------------\nCycle:" + cycle + "\t" + counter + "\t" + instruction
+					+ "\nRegisters";
+			counter = Decode(instruction, counter);
+			for (int i = 0; i <= 24; i += 8) {
+				String regNo = String.valueOf(i);
+				if (regNo.length() == 1)
+					regNo = "0" + regNo;
+				simulation += "\nR" + regNo + ":";
+				for (int j = i; j < i + 8; j++) {
+					simulation += "\t" + registers.get("R" + j);
 				}
-				String simulation = "--------------------\nCycle:" + cycle + "\t" + instruction + "\nRegisters";
-				for (int i = 0; i <= 24; i += 8) {
-					String regNo = String.valueOf(i);
-					if (regNo.length() == 1)
-						regNo = "0" + regNo;
-					simulation += "\nR" + regNo + ":";
-					for (int j = i; j < i + 8; j++) {
-						simulation += "\t" + registers.get("R" + j);
-					}
-				}
-				simulation += "\nData";
-				for (int i = breakLocation; i <= memoryLocation; i += 32) {
-					simulation += "\n" + i + ":";
-					for (int j = i; j < i + 32; j += 4) {
-						simulation += "\t" + memory.get(j);
-					}
-				}
-				System.out.println(simulation);
-				simulationOutput.add(simulation);
-				cycle++;
 			}
+			simulation += "\nData";
+			for (int i = breakLocation; i <= memoryLocation; i += 32) {
+				simulation += "\n" + i + ":";
+				for (int j = i; j < i + 32; j += 4) {
+					simulation += "\t" + memory.get(j);
+				}
+			}
+			System.out.println(simulation);
+			simulationOutput.add(simulation);
+			if (instruction.equals("BREAK"))
+				break;
+			cycle++;
 		}
-
 	}
 
-	private static void Decode(String instruction) {
+	private static int Decode(String instruction, int counter) {
 		String[] ins = instruction.split(" ");
 		Ops ops = Ops.valueOf(ins[0]);
 		String rd, rs, rt, iv, ii;
@@ -85,83 +109,121 @@ public class MIPSsims {
 			rs = ins[2].replace(",", "");
 			rt = ins[3];
 			registers.put(rt, registers.get(rd) + registers.get(rs));
+			counter += 4;
 			break;
 		case ADDI:
 			rt = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			iv = ins[3].replace("#", "");
 			registers.put(rt, Integer.parseInt(iv) + registers.get(rs));
+			counter += 4;
 			break;
 		case AND:
 			rd = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			rt = ins[3];
 			registers.put(rd, registers.get(rt) & registers.get(rs));
+			counter += 4;
 			break;
 		case ANDI:
 			rt = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			iv = ins[3].replace("#", "");
 			registers.put(rt, Integer.parseInt(iv) & registers.get(rs));
+			counter += 4;
 			break;
 		case BEQ:
+			rs = ins[1].replace(",", "");
+			rt = ins[2].replace(",", "");
+			ii = ins[3].replace("#", "");
+			if (registers.get(rt) == registers.get(rs)) {
+				counter = counter + 4 + Integer.parseInt(ii);
+			} else
+				counter += 4;
 			break;
 		case BGTZ:
+			rs = ins[1].replace(",", "");
+			ii = ins[2].replace("#", "");
+			if (registers.get(rs) > 0) {
+				counter = counter + 4 + Integer.parseInt(ii);
+			} else
+				counter += 4;
 			break;
 		case BREAK:
+			counter += 4;
 			break;
 		case J:
+			ii = ins[1].replace("#", "");
+			counter = Integer.parseInt(ii);
 			break;
 		case LW:
+			rt = ins[1].replace(",", "");
+			iv = ins[2].split("\\(")[0];
+			ii = ins[2].split("\\(")[1].replace(")", "");
+			registers.put(rt, memory.get(Integer.parseInt(iv) + registers.get(ii)));
+			counter += 4;
 			break;
 		case MUL:
 			rd = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			rt = ins[3];
 			registers.put(rd, registers.get(rt) * registers.get(rs));
+			counter += 4;
 			break;
 		case NOR:
 			rd = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			rt = ins[3];
 			registers.put(rd, ~(registers.get(rt) | registers.get(rs)));
+			counter += 4;
 			break;
 		case OR:
 			rd = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			rt = ins[3];
 			registers.put(rd, (registers.get(rt) | registers.get(rs)));
+			counter += 4;
 			break;
 		case ORI:
 			rt = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			iv = ins[3].replace("#", "");
 			registers.put(rt, Integer.parseInt(iv) | registers.get(rs));
+			counter += 4;
 			break;
 		case SUB:
 			rd = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			rt = ins[3];
 			registers.put(rd, (registers.get(rs) - registers.get(rt)));
+			counter += 4;
 			break;
 		case SW:
+			rt = ins[1].replace(",", "");
+			iv = ins[2].split("\\(")[0];
+			ii = ins[2].split("\\(")[1].replace(")", "");
+			memory.put(Integer.parseInt(iv) + registers.get(ii), registers.get(rt));
+			counter += 4;
 			break;
 		case XOR:
 			rd = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			rt = ins[3];
 			registers.put(rd, (registers.get(rs) ^ registers.get(rt)));
+			counter += 4;
 			break;
 		case XORI:
 			rt = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			iv = ins[3].replace("#", "");
 			registers.put(rt, Integer.parseInt(iv) ^ registers.get(rs));
+			counter += 4;
 			break;
 		default:
 			break;
 
 		}
+		return counter;
 	}
 
 	private static void DisAssembler(List<Long> input) {
