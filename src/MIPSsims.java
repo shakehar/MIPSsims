@@ -3,24 +3,68 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Hashtable;
 import java.util.List;
 
 public class MIPSsims {
 
-	public static int memorylocation = 124;
+	public static int memoryLocation = 124;
+	public static int breakLocation = 0;
 	public static List<String> disassemblyOutput = new ArrayList<>();
+	public static List<String> simulationOutput = new ArrayList<>();
+	public static Hashtable registers = new Hashtable<Integer, Integer>();
 	static boolean isBreak = false;
 
 	public static void main(String[] args) {
-
 		String filename = args[0];
 		List<Long> input = ReadFile(filename);
 		DisAssembler(input);
+		InitializeRegisters();
+		Simulator(disassemblyOutput);
+	}
+
+	@SuppressWarnings("unchecked")
+	private static void InitializeRegisters() {
+		for (int i = 0; i < 33; i++) {
+			registers.put(i, 0);
+		}
+
+	}
+
+	private static void Simulator(List<String> disassemblyOutput) {
+		int cycle = 1;
+		boolean isInstruction = true;
+		for (String instruction : disassemblyOutput) {
+			if (isInstruction) {
+				if (instruction.split("\t")[2].equals("BREAK")) {
+					isInstruction = false;
+				}
+				String simulation = "--------------------\nCycle:" + cycle + "\t" + instruction.split("\t")[2]
+						+ "\nRegisters";
+				for (int i = 0; i <= 24; i += 8) {
+					String regNo = String.valueOf(i);
+					if (regNo.length() == 1)
+						regNo = "0" + regNo;
+					simulation += "\nR" + regNo + ":";
+					for (int j = i; j < i + 8; j++) {
+						simulation += "\t" + registers.get(j);
+					}
+				}
+				simulation += "\nData";
+				for (int i = breakLocation + 4; i <= memoryLocation; i += 32) {
+					simulation += "\n" + i + ":";
+				}
+				System.out.println(simulation);
+				simulationOutput.add(simulation);
+				cycle++;
+			}
+		}
+
 	}
 
 	private static void DisAssembler(List<Long> input) {
 		for (Long word : input) {
-			memorylocation += 4;
+			memoryLocation += 4;
 			if (!isBreak) {
 				Category cat = GetCategory(word);
 				ProcessInstructions(cat, word);
@@ -34,13 +78,11 @@ public class MIPSsims {
 
 		while (stringWord.length() < 32)
 			stringWord = "0" + stringWord;
-		String disassembly = stringWord + "\t" + memorylocation;
-		if (word >> 31 == 0) {
-			disassembly += "\t" + word;
-		} else {
-
+		String disassembly = stringWord + "\t" + memoryLocation;
+		if (word >> 31 != 0) {
+			word = (long) Long.valueOf(Long.toHexString(word), 16).intValue();
 		}
-
+		disassembly += "\t" + word;
 		System.out.println(disassembly);
 		disassemblyOutput.add(disassembly);
 
@@ -68,7 +110,7 @@ public class MIPSsims {
 		rt = (word >> 19) & 0b11111;
 		op = Category3OPS.fromByte((int) ((word >> 16) & 0b111));
 		iv = (word & 0b1111111111111111);
-		String disassembly = Long.toBinaryString(word) + "\t" + memorylocation + "\t" + op.toString() + " "
+		String disassembly = Long.toBinaryString(word) + "\t" + memoryLocation + "\t" + op.toString() + " "
 				+ RegisterName(rt) + ", " + RegisterName(rs) + ", " + HashValue(iv);
 		System.out.println(disassembly);
 		disassemblyOutput.add(disassembly);
@@ -86,7 +128,7 @@ public class MIPSsims {
 		op = Category2OPS.fromByte((int) ((word >> 16) & 0b111));
 		rd = ((word >> 11) & 0b11111);
 
-		String disassembly = Long.toBinaryString(word) + "\t" + memorylocation + "\t" + op.toString() + " "
+		String disassembly = Long.toBinaryString(word) + "\t" + memoryLocation + "\t" + op.toString() + " "
 				+ RegisterName(rd) + ", " + RegisterName(rs) + ", " + RegisterName(rt);
 		System.out.println(disassembly);
 		disassemblyOutput.add(disassembly);
@@ -98,34 +140,35 @@ public class MIPSsims {
 
 	private static void ProcessCategory1(long word) {
 
-		long rs, rt, rd, ii, delaySlot;
+		long rs, rt, ii, delaySlot;
 		Category1OPS op;
 		String stringWord = Long.toBinaryString(word);
 		// ensure that length of word is 32
 		while (stringWord.length() < 32)
 			stringWord = "0" + stringWord;
-		String disassembly = stringWord + "\t" + memorylocation + "\t";
+		String disassembly = stringWord + "\t" + memoryLocation + "\t";
 		op = Category1OPS.fromByte((int) ((word >> 26) & 0b111));
 		switch (op) {
 		case BEQ:
 			rs = (word >> 21) & 0b11111;
 			rt = (word >> 16) & 0b11111;
-			delaySlot = (((memorylocation + 4) >> 28) << 28);
-			ii = word & 0b1111111111111111;
+			delaySlot = (((memoryLocation + 4) >> 28) << 28);
+			ii = (word & 0b1111111111111111) << 2;
 			disassembly += op.toString() + " " + RegisterName(rs) + ", " + RegisterName(rt) + ", " + HashValue(ii);
 			break;
 		case BGTZ:
 			rs = (word >> 21) & 0b11111;
-			ii = word & 0b1111111111111111;
+			ii = (word & 0b1111111111111111) << 2;
 			disassembly += op.toString() + " " + RegisterName(rs) + ", " + HashValue(ii);
 			break;
 		case BREAK:
 			disassembly += op.toString();
 			isBreak = true;
+			breakLocation = memoryLocation;
 			break;
 		case J:
 			ii = (word << 2) & 0b11111111111111111111111111;
-			delaySlot = (((memorylocation + 4) >> 28) << 28);
+			delaySlot = (((memoryLocation + 4) >> 28) << 28);
 			ii = ii ^ delaySlot;
 			disassembly += op.toString() + " " + HashValue(ii);
 			break;
@@ -146,6 +189,7 @@ public class MIPSsims {
 
 		}
 		System.out.println(disassembly);
+		disassemblyOutput.add(disassembly);
 
 	}
 
