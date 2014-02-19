@@ -89,7 +89,8 @@ public class MIPSsims {
 			for (int i = breakLocation; i <= memoryLocation; i += 32) {
 				simulation += "\n" + i + ":";
 				for (int j = i; j < i + 32; j += 4) {
-					simulation += "\t" + memory.get(j);
+					if (memory.get(j) != null)
+						simulation += "\t" + memory.get(j);
 				}
 			}
 			System.out.println(simulation);
