@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
 
-public class MIPSsims {
+public class MIPSsim {
 
 	public static int memoryLocation = 124;
 	public static int breakLocation = 0;
@@ -28,8 +28,8 @@ public class MIPSsims {
 		InitializeInstructions();
 		InitializeMemory();
 		Simulator();
-		PrintFile(disassemblyOutput, "disassembly.txt");
-		PrintFile(simulationOutput, "simulation.txt");
+		PrintFile(disassemblyOutput, "generated_disassembly.txt");
+		PrintFile(simulationOutput, "generated_simulation.txt");
 	}
 
 	private static void PrintFile(List<String> output, String filename) throws IOException {
@@ -74,7 +74,7 @@ public class MIPSsims {
 		while (true) {
 			String instruction = instructions.get(counter);
 			String simulation = "--------------------\nCycle:" + cycle + "\t" + counter + "\t" + instruction
-					+ "\nRegisters";
+					+ "\n\nRegisters";
 			counter = Decode(instruction, counter);
 			for (int i = 0; i <= 24; i += 8) {
 				String regNo = String.valueOf(i);
@@ -85,7 +85,7 @@ public class MIPSsims {
 					simulation += "\t" + registers.get("R" + j);
 				}
 			}
-			simulation += "\nData";
+			simulation += "\n\nData";
 			for (int i = breakLocation; i <= memoryLocation; i += 32) {
 				simulation += "\n" + i + ":";
 				for (int j = i; j < i + 32; j += 4) {
@@ -93,6 +93,7 @@ public class MIPSsims {
 						simulation += "\t" + memory.get(j);
 				}
 			}
+			simulation += "\n";
 			System.out.println(simulation);
 			simulationOutput.add(simulation);
 			if (instruction.equals("BREAK"))
@@ -110,7 +111,7 @@ public class MIPSsims {
 			rd = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			rt = ins[3];
-			registers.put(rt, registers.get(rd) + registers.get(rs));
+			registers.put(rd, registers.get(rs) + registers.get(rt));
 			counter += 4;
 			break;
 		case ADDI:
@@ -131,7 +132,7 @@ public class MIPSsims {
 			rt = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			iv = ins[3].replace("#", "");
-			registers.put(rt, Integer.parseInt(iv) & registers.get(rs));
+			registers.put(rt, registers.get(rs) & Integer.parseInt(iv));
 			counter += 4;
 			break;
 		case BEQ:
@@ -169,28 +170,28 @@ public class MIPSsims {
 			rd = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			rt = ins[3];
-			registers.put(rd, registers.get(rt) * registers.get(rs));
+			registers.put(rd, registers.get(rs) * registers.get(rt));
 			counter += 4;
 			break;
 		case NOR:
 			rd = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			rt = ins[3];
-			registers.put(rd, ~(registers.get(rt) | registers.get(rs)));
+			registers.put(rd, ~(registers.get(rs) | registers.get(rt)));
 			counter += 4;
 			break;
 		case OR:
 			rd = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			rt = ins[3];
-			registers.put(rd, (registers.get(rt) | registers.get(rs)));
+			registers.put(rd, (registers.get(rs) | registers.get(rt)));
 			counter += 4;
 			break;
 		case ORI:
 			rt = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			iv = ins[3].replace("#", "");
-			registers.put(rt, Integer.parseInt(iv) | registers.get(rs));
+			registers.put(rt, registers.get(rs) | Integer.parseInt(iv));
 			counter += 4;
 			break;
 		case SUB:
@@ -218,7 +219,7 @@ public class MIPSsims {
 			rt = ins[1].replace(",", "");
 			rs = ins[2].replace(",", "");
 			iv = ins[3].replace("#", "");
-			registers.put(rt, Integer.parseInt(iv) ^ registers.get(rs));
+			registers.put(rt, registers.get(rs) ^ Integer.parseInt(iv));
 			counter += 4;
 			break;
 		default:
