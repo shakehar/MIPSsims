@@ -93,7 +93,8 @@ public class MIPSsim {
 						simulation += "\t" + memory.get(j);
 				}
 			}
-			simulation += "\n";
+			if (!instruction.equals("BREAK"))
+				simulation += "\n";
 			System.out.println(simulation);
 			simulationOutput.add(simulation);
 			if (instruction.equals("BREAK"))
