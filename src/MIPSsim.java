@@ -474,4 +474,26 @@ public class MIPSsim {
 	enum Ops {
 		J, BEQ, BGTZ, BREAK, SW, LW, ADD, SUB, MUL, AND, OR, XOR, NOR, ADDI, ANDI, ORI, XORI;
 	}
+
+	class Chronos {
+		private int currentCycle;
+		private int nextCycle;
+
+		public int getCurrentCycle() {
+			return currentCycle;
+		}
+
+		public void setCurrentCycle(int currentCycle) {
+			this.currentCycle = currentCycle;
+		}
+
+		public int getNextCycle() {
+			return nextCycle;
+		}
+
+		public void setNextCycle(int nextCycle) {
+			this.nextCycle = nextCycle;
+		}
+
+	}
 }
