@@ -73,8 +73,24 @@ public class MIPSsim {
 		int counter = 128;
 		while (true) {
 			String instruction = instructions.get(counter);
-			String simulation = "--------------------\nCycle:" + cycle + "\t" + counter + "\t" + instruction
-					+ "\n\nRegisters";
+			String simulation = "--------------------\nCycle:" + cycle;
+			simulation += "\n\nIF Unit:";
+			simulation += "\n\tWaiting Instruction:" + instructions.get(waitingInstruction);
+			simulation += "\n\tExecuted Instruction:" + instructions.get(executedInstruction);
+			simulation += "\nPre-Issue Queue:";
+			simulation += "\n\tEntry 0:[" + instructions.get(PreIssueQueue[0]);
+			simulation += "\n\tEntry 1:[" + instructions.get(PreIssueQueue[1]);
+			simulation += "\n\tEntry 2:[" + instructions.get(PreIssueQueue[2]);
+			simulation += "\n\tEntry 3:[" + instructions.get(PreIssueQueue[3]);
+			simulation += "\nPre-ALU Queue:";
+			simulation += "\n\tEntry 0:[";
+			simulation += "\n\tEntry 1:[";
+			simulation += "\nPre-MEM Queue:";
+			simulation += "\nPost-MEM Queue:";
+			simulation += "\nPost-ALU Queue:";
+
+			simulation += "\n\nRegisters";
+			counter = Decode(instruction, counter);
 			counter = Decode(instruction, counter);
 			for (int i = 0; i <= 24; i += 8) {
 				String regNo = String.valueOf(i);
@@ -475,25 +491,45 @@ public class MIPSsim {
 		J, BEQ, BGTZ, BREAK, SW, LW, ADD, SUB, MUL, AND, OR, XOR, NOR, ADDI, ANDI, ORI, XORI;
 	}
 
-	class Chronos {
-		private int currentCycle;
-		private int nextCycle;
+	// ////
 
-		public int getCurrentCycle() {
-			return currentCycle;
-		}
+	static boolean[] isRegisterBusy = new boolean[32];
 
-		public void setCurrentCycle(int currentCycle) {
-			this.currentCycle = currentCycle;
-		}
+	static int waitingInstruction;
+	static int executedInstruction;
 
-		public int getNextCycle() {
-			return nextCycle;
-		}
+	private static int[] PreIssueQueue = new int[4];
+	private static int[] PreALUQueue = new int[2];
+	private static int[] PostALUQueue = new int[1];
+	private static int[] PreMemQueue = new int[1];
+	private static int[] PostMemQueue = new int[1];
 
-		public void setNextCycle(int nextCycle) {
-			this.nextCycle = nextCycle;
-		}
+	private static int IFNextFree = 0;
+	private static int IssueNextFree = 0;
+	private static int ALUNextFree = 0;
+	private static int MEMNextFree = 0;
+	private static int WBNextFree = 0;
 
+}
+
+class Chronos {
+	private int currentCycle;
+	private int nextCycle;
+
+	public int getCurrentCycle() {
+		return currentCycle;
 	}
+
+	public void setCurrentCycle(int currentCycle) {
+		this.currentCycle = currentCycle;
+	}
+
+	public int getNextCycle() {
+		return nextCycle;
+	}
+
+	public void setNextCycle(int nextCycle) {
+		this.nextCycle = nextCycle;
+	}
+
 }
