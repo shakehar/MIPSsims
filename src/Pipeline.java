@@ -36,10 +36,22 @@ public class Pipeline {
 	private void PreIssueInsert(int instOne, int instTwo) {
 		if (preIssueQueueSize < 3) {
 			Ops op1 = GetOpType(instOne);
+			Ops op2 = null;
+			if (instTwo != 0) {
+				op2 = GetOpType(instTwo);
+			}
 			if (op1.equals(Ops.BEQ) || op1.equals(Ops.BGTZ)) {
 				// TODO set waitingInstruction
+				waitingInstruction = instOne;
 			}
 			if (op1.equals(Ops.BREAK)) {
+				// TODO break this shit
+			}
+			if (op2.equals(Ops.BEQ) || op2.equals(Ops.BGTZ)) {
+				// TODO set waitingInstruction
+				waitingInstruction = instOne;
+			}
+			if (op2.equals(Ops.BREAK)) {
 				// TODO break this shit
 			}
 			preIssueQueue[preIssueQueueTail] = instOne;
@@ -81,12 +93,12 @@ public class Pipeline {
 				preAluHasCapacity = true;
 			}
 			Ops op = GetOpType(preAluQueue[preAluQueueHead]);
-			if (op.equals(OpTypess.CALC) && postAluQueue == -1) {
+			if (op.equals(OpTypessf.CALC) && postAluQueue == -1) {
 				postAluQueue = preAluQueue[preAluQueueHead];
 				preAluQueue[preAluQueueHead] = -1;
 				preAluQueueHead = (preAluQueueHead + 1) % 2;
 				preAluQueueSize -= 1;
-			} else if (op.equals(OpTypess.LDSW) && preMemQueue == -1) {
+			} else if (op.equals(OpTypessf.LDSW) && preMemQueue == -1) {
 				preMemQueue = preAluQueue[preAluQueueHead];
 				preAluQueue[preAluQueueHead] = -1;
 				preAluQueueHead = (preAluQueueHead + 1) % 2;
@@ -234,6 +246,6 @@ enum Ops {
 	J, BEQ, BGTZ, BREAK, SW, LW, ADD, SUB, MUL, AND, OR, XOR, NOR, ADDI, ANDI, ORI, XORI;
 }
 
-enum OpTypess {
+enum OpTypessf {
 	Branch, LDSW, CALC;
 }
