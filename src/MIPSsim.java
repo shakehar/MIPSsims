@@ -78,10 +78,10 @@ public class MIPSsim {
 			simulation += "\n\tWaiting Instruction:" + instructions.get(waitingInstruction);
 			simulation += "\n\tExecuted Instruction:" + instructions.get(executedInstruction);
 			simulation += "\nPre-Issue Queue:";
-			simulation += "\n\tEntry 0:[" + instructions.get(PreIssueQueue[0]);
-			simulation += "\n\tEntry 1:[" + instructions.get(PreIssueQueue[1]);
-			simulation += "\n\tEntry 2:[" + instructions.get(PreIssueQueue[2]);
-			simulation += "\n\tEntry 3:[" + instructions.get(PreIssueQueue[3]);
+			simulation += "\n\tEntry 0:[" + instructions.get(0);
+			simulation += "\n\tEntry 1:[" + instructions.get(0);
+			simulation += "\n\tEntry 2:[" + instructions.get(0);
+			simulation += "\n\tEntry 3:[" + instructions.get(0);
 			simulation += "\nPre-ALU Queue:";
 			simulation += "\n\tEntry 0:[";
 			simulation += "\n\tEntry 1:[";
@@ -497,18 +497,6 @@ public class MIPSsim {
 
 	static int waitingInstruction;
 	static int executedInstruction;
-
-	private static int[] PreIssueQueue = new int[4];
-	private static int[] PreALUQueue = new int[2];
-	private static int[] PostALUQueue = new int[1];
-	private static int[] PreMemQueue = new int[1];
-	private static int[] PostMemQueue = new int[1];
-
-	private static int IFNextFree = 0;
-	private static int IssueNextFree = 0;
-	private static int ALUNextFree = 0;
-	private static int MEMNextFree = 0;
-	private static int WBNextFree = 0;
 
 }
 
