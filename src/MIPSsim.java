@@ -500,9 +500,7 @@ public class MIPSsim {
 	private int preAluQueueSize = 0;
 	private int preAluQueueHead = 0;
 	private int preAluQueueTail = 1;
-	private int[] preIssueQueue = { -1, -1, -1, -1 };
-	private int preIssueQueueHead = 0;
-	private int preIssueQueueTail = 0;
+	private ArrayList<Integer> preIssueQueue = new ArrayList<>();
 	private int preIssueQueueSize = 0;
 	private boolean preAluHasCapacity = true;
 
@@ -611,10 +609,8 @@ public class MIPSsim {
 				} else
 					nextCounter = instTwo + 4;
 			}
-			preIssueQueue[preIssueQueueTail] = instOne;
-			preIssueQueueTail = (preIssueQueueTail + 1) % 4;
-			preIssueQueue[preIssueQueueTail] = instTwo;
-			preIssueQueueTail = (preIssueQueueTail + 1) % 4;
+			preIssueQueue.add(instOne);
+			preIssueQueue.add(instTwo);
 		}
 		return nextCounter;
 	}
@@ -624,48 +620,72 @@ public class MIPSsim {
 	 * Was free last time
 	 */
 	private void PreIssueMove() {
-		HashMap<String, Boolean> isLocalRegisterRead = new HashMap<>();
-		HashMap<String, Boolean> isLocalRegisterWrite = new HashMap<>();
-		/** Add local score boarding */
-		int counter = 0;
-		while (counter < 0) {
-			String[] input = GetRegisters(instructions.get(preAluQueue[(preAluQueueHead + counter) % 4]));
-			if (input[1] != null) {
-				isLocalRegisterWrite.put(input[1], true);
-			}
-			if (input[2] != null) {
-				isLocalRegisterRead.put(input[2], true);
-			}
-			if (input[3] != null) {
-				isLocalRegisterRead.put(input[3], true);
-			}
-			counter++;
-		}
 		if (preAluHasCapacity) {
-			while (preIssueQueueSize > 0 && preAluQueueSize < 2) {
-				// TODO - local score boarding
-				// TODO - handle in order Store and block Load if required
-				if (!HasHazard(preIssueQueue[preIssueQueueHead])) {
-					// handle jump
-					Ops op = GetOpType(preIssueQueue[preIssueQueueHead]);
-					if (op.equals(Ops.J)) {
-						Decode(instructions.get(preIssueQueue[preIssueQueueHead]), 0);
-					} else {
-						preAluQueue[preAluQueueTail] = preIssueQueue[preIssueQueueHead];
-						ReserveResources(preIssueQueue[preIssueQueueHead]);
-						preAluQueueTail = (preAluQueueTail + 1) % 2;
+			int counter = 0;
+			while (counter < preIssueQueueSize && preAluQueueSize < 2) {
+				if (!HasHazard(preIssueQueue.get(counter)) && !HasLocalHazard(counter)) {
+					Ops op = GetOpType(preIssueQueue.get(counter));
+					if (!op.equals(Ops.J)) {
+						preAluQueue[preAluQueueTail] = preIssueQueue.get(counter);
+						preIssueQueue.remove(counter);
 						preAluQueueSize += 1;
-					}
-					preIssueQueue[preAluQueueHead] = -1;
-					preIssueQueueHead = (preIssueQueueHead + 1) % 4;
-					preIssueQueueSize -= 1;
-					if (op.equals(Ops.J)) {
+
+					} else {
+						Decode(instructions.get(preIssueQueue.get(counter)), 0);
 						break;
 					}
+
+				}
+				counter++;
+			}
+		}
+	}
+
+	private boolean HasLocalHazard(int counter) {
+		HashMap<String, Boolean> isLocalRegisterRead = new HashMap<>();
+		HashMap<String, Boolean> isLocalRegisterWrite = new HashMap<>();
+		boolean hasStore = false;
+		for (int i = 0; i < counter; i++) {
+			String[] input = GetRegisters(instructions.get(preIssueQueue.get(i)));
+			if (Ops.valueOf(input[0]).equals(Ops.SW)) {
+				hasStore = true;
+			}
+			if (input[1] != null) {
+				isLocalRegisterWrite.put(input[0], true);
+			}
+			for (int j = 2; j < 4; i++) {
+				if (input[j] != null) {
+					isLocalRegisterRead.put(input[j], true);
 				}
 			}
 		}
+		String[] input = GetRegisters(instructions.get(preIssueQueue.get(counter)));
+		if ((Ops.valueOf(input[0]).equals(Ops.LW) || Ops.valueOf(input[0]).equals(Ops.SW)) && hasStore) {
+			return true;
+		}
+		if (input[1] != null) {
+			if (isLocalRegisterWrite.get(input[1])) {
+				return true;
+			}
+		}
+		if (input[2] != null) {
+			if (isLocalRegisterWrite.get(input[2])) {
+				return true;
+			}
+		}
+		if (input[3] != null) {
+			if (isLocalRegisterWrite.get(input[3])) {
+				return true;
+			}
+		}
+		// WAR Hazard
+		if (input[1] != null) {
+			if (isLocalRegisterRead.get(input[1])) {
+				return true;
+			}
+		}
 
+		return false;
 	}
 
 	/**
@@ -727,7 +747,16 @@ public class MIPSsim {
 	}
 
 	private void FreeRegisters(int instructionCode) {
-		// TODO Free resources when done
+		String input[] = GetRegisters(instructions.get(instructionCode));
+		if (input[1] != null) {
+			isRegisterWrite.put(input[1], false);
+		}
+		if (input[2] != null) {
+			isRegisterRead.put(input[2], false);
+		}
+		if (input[3] != null) {
+			isRegisterWrite.put(input[3], false);
+		}
 
 	}
 
