@@ -491,7 +491,7 @@ public class MIPSsim {
 		J, BEQ, BGTZ, BREAK, SW, LW, ADD, SUB, MUL, AND, OR, XOR, NOR, ADDI, ANDI, ORI, XORI;
 	}
 
-	// ////
+	/*******************************************************************************************************************************/
 
 	private int postMemQueue = -1;
 	private int postAluQueue = -1;
@@ -506,13 +506,14 @@ public class MIPSsim {
 	private int preIssueQueueSize = 0;
 	private boolean preAluHasCapacity = true;
 
-	private static HashMap<Integer, String> instruction = new HashMap<Integer, String>();
-
 	private static HashMap<String, Boolean> isRegisterRead = new HashMap<>(32);
 	private static HashMap<String, Boolean> isRegisterWrite = new HashMap<>(32);
 
-	static int waitingInstruction;
-	static int executedInstruction;
+	static int waitingInstruction = -1;
+	static int executedInstruction = -1;
+
+	String branchDependency1 = null;
+	String branchDependency2 = null;
 
 	public int Pipeline(int counter) {
 		PostMemMove();
@@ -520,31 +521,49 @@ public class MIPSsim {
 		PreMemMove();
 		PreAluMove();
 		PreIssueMove();
-		int newCounter = PreIssueInsert(counter, counter + 4);
+		int newCounter = PreIssueInsert(counter);
 		return newCounter;
 	}
 
-	private int PreIssueInsert(int instOne, int instTwo) {
+	private int PreIssueInsert(int instOne) {
 		int nextCounter = instOne;
-		if (preIssueQueueSize < 3) {
+		int instTwo = instOne + 4;
+
+		if (waitingInstruction == -1) {
+			executedInstruction = -1;
+		}
+		if (waitingInstruction != -1) {
+			if (branchDependency1 != null && !isRegisterWrite.get(branchDependency1)) {
+				branchDependency1 = null;
+			}
+			if (branchDependency2 != null && !isRegisterWrite.get(branchDependency2)) {
+				branchDependency2 = null;
+			}
+			if (branchDependency1 == null && branchDependency2 == null) {
+				executedInstruction = waitingInstruction;
+				waitingInstruction = -1;
+			}
+		} else if (preIssueQueueSize < 3) {
 			Ops op1 = GetOpType(instOne);
 			Ops op2 = null;
-			if (instTwo != 0) {
+			if (instructions.contains(instTwo)) {
 				op2 = GetOpType(instTwo);
 			}
 			if (op1.equals(Ops.BEQ) || op1.equals(Ops.BGTZ)) {
-				// TODO set waitingInstruction
+				// TODO set dependencies
 				waitingInstruction = instOne;
 			}
 			if (op1.equals(Ops.BREAK)) {
-				// TODO break this shit
+				return nextCounter;
 			}
-			if (op2.equals(Ops.BEQ) || op2.equals(Ops.BGTZ)) {
-				// TODO set waitingInstruction
-				waitingInstruction = instOne;
-			}
-			if (op2.equals(Ops.BREAK)) {
-				// TODO break this shit
+			if (op2 != null) {
+				if (op2.equals(Ops.BEQ) || op2.equals(Ops.BGTZ)) {
+					// TODO set dependencies
+					waitingInstruction = instOne;
+				}
+				if (op2.equals(Ops.BREAK)) {
+					return nextCounter += 4;
+				}
 			}
 			preIssueQueue[preIssueQueueTail] = instOne;
 			preIssueQueueTail = (preIssueQueueTail + 1) % 4;
@@ -555,8 +574,8 @@ public class MIPSsim {
 	}
 
 	/**
-	 * Move from PreIssue to PreALU. Check for Hazards here Check preAlucycleWas
-	 * free last time
+	 * Move from PreIssue to PreALU. Checks for Hazards here Check preAlucache
+	 * Was free last time
 	 */
 	private void PreIssueMove() {
 		if (preAluHasCapacity) {
@@ -587,7 +606,7 @@ public class MIPSsim {
 			} else {
 				preAluHasCapacity = true;
 			}
-			Ops op = GetOpTypeGroup(preAluQueue[preAluQueueHead]);
+			OpTypes op = GetOpTypeGroup(preAluQueue[preAluQueueHead]);
 			if (op.equals(OpTypes.CALC) && postAluQueue == -1) {
 				postAluQueue = preAluQueue[preAluQueueHead];
 				preAluQueue[preAluQueueHead] = -1;
@@ -634,13 +653,30 @@ public class MIPSsim {
 	}
 
 	private Ops GetOpType(int instructionCode) {
-		String[] input = GetRegisters(instruction.get(instructionCode));
+		String[] input = GetRegisters(instructions.get(instructionCode));
 		return Ops.valueOf(input[0]);
 	}
 
-	private Ops GetOpTypeGroup(int i) {
-		// TODO Auto-generated method stub
-		return null;
+	private OpTypes GetOpTypeGroup(int instructionCode) {
+		Ops op = GetOpType(instructionCode);
+		OpTypes opType = null;
+		switch (op) {
+		case BEQ:
+		case BGTZ:
+			opType = OpTypes.Branch;
+			break;
+		case J:
+			opType = OpTypes.JUMP;
+			break;
+		case LW:
+		case SW:
+			opType = OpTypes.LDSW;
+			break;
+		default:
+			opType = OpTypes.CALC;
+			break;
+		}
+		return opType;
 	}
 
 	/**
@@ -650,7 +686,7 @@ public class MIPSsim {
 	 */
 	private void ReserveResources(int instructionCode) {
 
-		String[] input = GetRegisters(instruction.get(instructionCode));
+		String[] input = GetRegisters(instructions.get(instructionCode));
 		if (input[1] != null) {
 			isRegisterWrite.put(input[0], true);
 		}
@@ -716,7 +752,7 @@ public class MIPSsim {
 
 	private boolean HasHazard(int instructionCode) {
 		// RAW -WAW Hazard
-		String[] input = GetRegisters(instruction.get(instructionCode));
+		String[] input = GetRegisters(instructions.get(instructionCode));
 		if (input[1] != null) {
 			if (isRegisterWrite.get(input[1])) {
 				return true;
@@ -743,5 +779,5 @@ public class MIPSsim {
 }
 
 enum OpTypes {
-	Branch, LDSW, CALC;
+	Branch, LDSW, CALC, JUMP;
 }
