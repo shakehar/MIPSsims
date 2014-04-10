@@ -529,7 +529,33 @@ public class MIPSsim {
 		int nextCounter = instOne;
 		int instTwo = instOne + 4;
 
-		if (waitingInstruction == -1) {
+		if (waitingInstruction == -1 && executedInstruction != -1) {
+
+			String[] ins = (instructions.get(executedInstruction).split(" "));
+			Ops ops = Ops.valueOf(ins[0]);
+			String rd, rs, rt, iv, ii;
+			switch (ops) {
+			case BEQ:
+				rs = ins[1].replace(",", "");
+				rt = ins[2].replace(",", "");
+				ii = ins[3].replace("#", "");
+				if (registers.get(rt) == registers.get(rs)) {
+					nextCounter = nextCounter + 4 + Integer.parseInt(ii);
+				} else
+					nextCounter += 4;
+				break;
+			case BGTZ:
+				rs = ins[1].replace(",", "");
+				ii = ins[2].replace("#", "");
+				if (registers.get(rs) > 0) {
+					nextCounter = nextCounter + 4 + Integer.parseInt(ii);
+				} else
+					nextCounter += 4;
+				break;
+			default:
+				break;
+			}
+
 			executedInstruction = -1;
 		}
 		if (waitingInstruction != -1) {
@@ -550,20 +576,40 @@ public class MIPSsim {
 				op2 = GetOpType(instTwo);
 			}
 			if (op1.equals(Ops.BEQ) || op1.equals(Ops.BGTZ)) {
-				// TODO set dependencies
+				String[] input = GetRegisters(instructions.get(instOne));
+				if (isRegisterWrite.get(input[2])) {
+					branchDependency1 = input[2];
+				}
+				if (isRegisterWrite.get(input[3])) {
+					branchDependency2 = input[3];
+				}
 				waitingInstruction = instOne;
-			}
-			if (op1.equals(Ops.BREAK)) {
+				nextCounter = instOne + 4;
+			} else if (op1.equals(Ops.J)) {
+				String ii = instructions.get(instOne).split(" ")[1].replace("#", "");
+				nextCounter = Integer.parseInt(ii);
+			} else if (op1.equals(Ops.BREAK)) {
 				return nextCounter;
 			}
 			if (op2 != null) {
 				if (op2.equals(Ops.BEQ) || op2.equals(Ops.BGTZ)) {
-					// TODO set dependencies
-					waitingInstruction = instOne;
-				}
-				if (op2.equals(Ops.BREAK)) {
+					String[] input = GetRegisters(instructions.get(instTwo));
+					if (isRegisterWrite.get(input[2])) {
+						branchDependency1 = input[2];
+					}
+					if (isRegisterWrite.get(input[3])) {
+						branchDependency2 = input[3];
+					}
+					waitingInstruction = instTwo;
+					nextCounter = instTwo + 4;
+				} else if (op2.equals(Ops.J)) {
+
+					String ii = instructions.get(instTwo).split(" ")[1].replace("#", "");
+					nextCounter = Integer.parseInt(ii);
+				} else if (op2.equals(Ops.BREAK)) {
 					return nextCounter += 4;
-				}
+				} else
+					nextCounter = instTwo + 4;
 			}
 			preIssueQueue[preIssueQueueTail] = instOne;
 			preIssueQueueTail = (preIssueQueueTail + 1) % 4;
@@ -578,18 +624,44 @@ public class MIPSsim {
 	 * Was free last time
 	 */
 	private void PreIssueMove() {
+		HashMap<String, Boolean> isLocalRegisterRead = new HashMap<>();
+		HashMap<String, Boolean> isLocalRegisterWrite = new HashMap<>();
+		/** Add local score boarding */
+		int counter = 0;
+		while (counter < 0) {
+			String[] input = GetRegisters(instructions.get(preAluQueue[(preAluQueueHead + counter) % 4]));
+			if (input[1] != null) {
+				isLocalRegisterWrite.put(input[1], true);
+			}
+			if (input[2] != null) {
+				isLocalRegisterRead.put(input[2], true);
+			}
+			if (input[3] != null) {
+				isLocalRegisterRead.put(input[3], true);
+			}
+			counter++;
+		}
 		if (preAluHasCapacity) {
 			while (preIssueQueueSize > 0 && preAluQueueSize < 2) {
-
+				// TODO - local score boarding
+				// TODO - handle in order Store and block Load if required
 				if (!HasHazard(preIssueQueue[preIssueQueueHead])) {
-
-					preAluQueue[preAluQueueTail] = preIssueQueue[preIssueQueueHead];
-					ReserveResources(preIssueQueue[preIssueQueueHead]);
-					preAluQueueTail = (preAluQueueTail + 1) % 2;
+					// handle jump
+					Ops op = GetOpType(preIssueQueue[preIssueQueueHead]);
+					if (op.equals(Ops.J)) {
+						Decode(instructions.get(preIssueQueue[preIssueQueueHead]), 0);
+					} else {
+						preAluQueue[preAluQueueTail] = preIssueQueue[preIssueQueueHead];
+						ReserveResources(preIssueQueue[preIssueQueueHead]);
+						preAluQueueTail = (preAluQueueTail + 1) % 2;
+						preAluQueueSize += 1;
+					}
 					preIssueQueue[preAluQueueHead] = -1;
 					preIssueQueueHead = (preIssueQueueHead + 1) % 4;
 					preIssueQueueSize -= 1;
-					preAluQueueSize += 1;
+					if (op.equals(Ops.J)) {
+						break;
+					}
 				}
 			}
 		}
@@ -648,7 +720,14 @@ public class MIPSsim {
 	}
 
 	private void WriteBack(int instructionCode) {
-		// TODO Auto-generated method stub
+		// TODO Call Decode here , might be required elsewhere
+		FreeRegisters(instructionCode);
+		Decode(instructions.get(instructionCode), 0);
+
+	}
+
+	private void FreeRegisters(int instructionCode) {
+		// TODO Free resources when done
 
 	}
 
