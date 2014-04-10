@@ -21,6 +21,29 @@ public class MIPSsim {
 	public static Hashtable<Integer, String> instructions = new Hashtable<Integer, String>();
 	static boolean isBreak = false;
 
+	/*************************************************************************/
+	private static int postMemQueue = -1;
+	private static int postAluQueue = -1;
+	private static int preMemQueue = -1;
+	private static int[] preAluQueue = { -1, -1 };
+	private static int preAluQueueSize = 0;
+	private static int preAluQueueHead = 0;
+	private static int preAluQueueTail = 1;
+	private static ArrayList<Integer> preIssueQueue = new ArrayList<>(4);
+	private static int preIssueQueueSize = 0;
+	private static boolean preAluHasCapacity = true;
+
+	private static HashMap<String, Boolean> isRegisterRead = new HashMap<>(32);
+	private static HashMap<String, Boolean> isRegisterWrite = new HashMap<>(32);
+
+	static int waitingInstruction = -1;
+	static int executedInstruction = -1;
+
+	static String branchDependency1 = null;
+	static String branchDependency2 = null;
+
+	/*************************************************************************/
+
 	public static void main(String[] args) throws IOException {
 		String filename = args[0];
 		List<Long> input = ReadFile(filename);
@@ -79,19 +102,19 @@ public class MIPSsim {
 			simulation += "\n\tWaiting Instruction:" + instructions.get(waitingInstruction);
 			simulation += "\n\tExecuted Instruction:" + instructions.get(executedInstruction);
 			simulation += "\nPre-Issue Queue:";
-			simulation += "\n\tEntry 0:[" + instructions.get(0);
-			simulation += "\n\tEntry 1:[" + instructions.get(0);
-			simulation += "\n\tEntry 2:[" + instructions.get(0);
-			simulation += "\n\tEntry 3:[" + instructions.get(0);
+			simulation += "\n\tEntry 0:[" + instructions.get(preIssueQueue.get(0)) + "]";
+			simulation += "\n\tEntry 1:[" + instructions.get(preIssueQueue.get(1)) + "]";
+			simulation += "\n\tEntry 2:[" + instructions.get(preIssueQueue.get(2)) + "]";
+			simulation += "\n\tEntry 3:[" + instructions.get(preIssueQueue.get(3)) + "]";
 			simulation += "\nPre-ALU Queue:";
-			simulation += "\n\tEntry 0:[";
-			simulation += "\n\tEntry 1:[";
-			simulation += "\nPre-MEM Queue:";
-			simulation += "\nPost-MEM Queue:";
-			simulation += "\nPost-ALU Queue:";
+			simulation += "\n\tEntry 0:[" + instructions.get(preAluQueue[preAluQueueHead]) + "]";
+			simulation += "\n\tEntry 1:[" + instructions.get(preAluQueue[preAluQueueTail]) + "]";
+			simulation += "\nPre-MEM Queue:" + instructions.get(preMemQueue);
+			simulation += "\nPost-MEM Queue:" + instructions.get(postMemQueue);
+			simulation += "\nPost-ALU Queue:" + instructions.get(postAluQueue);
 			simulation += "\n\nRegisters";
 
-			counter = Decode(instruction, counter);
+			counter = Pipeline(counter);
 			for (int i = 0; i <= 24; i += 8) {
 				String regNo = String.valueOf(i);
 				if (regNo.length() == 1)
@@ -493,27 +516,7 @@ public class MIPSsim {
 
 	/*******************************************************************************************************************************/
 
-	private int postMemQueue = -1;
-	private int postAluQueue = -1;
-	private int preMemQueue = -1;
-	private int[] preAluQueue = { -1, -1 };
-	private int preAluQueueSize = 0;
-	private int preAluQueueHead = 0;
-	private int preAluQueueTail = 1;
-	private ArrayList<Integer> preIssueQueue = new ArrayList<>();
-	private int preIssueQueueSize = 0;
-	private boolean preAluHasCapacity = true;
-
-	private static HashMap<String, Boolean> isRegisterRead = new HashMap<>(32);
-	private static HashMap<String, Boolean> isRegisterWrite = new HashMap<>(32);
-
-	static int waitingInstruction = -1;
-	static int executedInstruction = -1;
-
-	String branchDependency1 = null;
-	String branchDependency2 = null;
-
-	public int Pipeline(int counter) {
+	public static int Pipeline(int counter) {
 		PostMemMove();
 		PostALUMove();
 		PreMemMove();
@@ -523,7 +526,7 @@ public class MIPSsim {
 		return newCounter;
 	}
 
-	private int PreIssueInsert(int instOne) {
+	private static int PreIssueInsert(int instOne) {
 		int nextCounter = instOne;
 		int instTwo = instOne + 4;
 
@@ -531,7 +534,7 @@ public class MIPSsim {
 
 			String[] ins = (instructions.get(executedInstruction).split(" "));
 			Ops ops = Ops.valueOf(ins[0]);
-			String rd, rs, rt, iv, ii;
+			String rs, rt, ii;
 			switch (ops) {
 			case BEQ:
 				rs = ins[1].replace(",", "");
@@ -619,13 +622,14 @@ public class MIPSsim {
 	 * Move from PreIssue to PreALU. Checks for Hazards here Check preAlucache
 	 * Was free last time
 	 */
-	private void PreIssueMove() {
+	private static void PreIssueMove() {
 		if (preAluHasCapacity) {
 			int counter = 0;
 			while (counter < preIssueQueueSize && preAluQueueSize < 2) {
 				if (!HasHazard(preIssueQueue.get(counter)) && !HasLocalHazard(counter)) {
 					Ops op = GetOpType(preIssueQueue.get(counter));
 					if (!op.equals(Ops.J)) {
+						ReserveResources(preIssueQueue.get(counter));
 						preAluQueue[preAluQueueTail] = preIssueQueue.get(counter);
 						preIssueQueue.remove(counter);
 						preAluQueueSize += 1;
@@ -641,7 +645,7 @@ public class MIPSsim {
 		}
 	}
 
-	private boolean HasLocalHazard(int counter) {
+	private static boolean HasLocalHazard(int counter) {
 		HashMap<String, Boolean> isLocalRegisterRead = new HashMap<>();
 		HashMap<String, Boolean> isLocalRegisterWrite = new HashMap<>();
 		boolean hasStore = false;
@@ -691,7 +695,7 @@ public class MIPSsim {
 	/**
 	 * Move from PreIssue to PreALU
 	 */
-	private void PreAluMove() {
+	private static void PreAluMove() {
 		if (preAluQueueSize > 0) {
 			if (preAluQueueSize == 2) {
 				preAluHasCapacity = false;
@@ -713,7 +717,7 @@ public class MIPSsim {
 		}
 	}
 
-	private void PreMemMove() {
+	private static void PreMemMove() {
 		if (preMemQueue > 0) {
 			if (postMemQueue == -1) {
 				postMemQueue = preMemQueue;
@@ -723,7 +727,7 @@ public class MIPSsim {
 
 	}
 
-	private void PostALUMove() {
+	private static void PostALUMove() {
 		if (postAluQueue > 0) {
 			WriteBack(postAluQueue);
 			postAluQueue = -1;
@@ -731,7 +735,7 @@ public class MIPSsim {
 
 	}
 
-	private void PostMemMove() {
+	private static void PostMemMove() {
 		if (postMemQueue > 0) {
 			WriteBack(postMemQueue);
 			postMemQueue = -1;
@@ -739,14 +743,14 @@ public class MIPSsim {
 
 	}
 
-	private void WriteBack(int instructionCode) {
+	private static void WriteBack(int instructionCode) {
 		// TODO Call Decode here , might be required elsewhere
 		FreeRegisters(instructionCode);
 		Decode(instructions.get(instructionCode), 0);
 
 	}
 
-	private void FreeRegisters(int instructionCode) {
+	private static void FreeRegisters(int instructionCode) {
 		String input[] = GetRegisters(instructions.get(instructionCode));
 		if (input[1] != null) {
 			isRegisterWrite.put(input[1], false);
@@ -760,12 +764,12 @@ public class MIPSsim {
 
 	}
 
-	private Ops GetOpType(int instructionCode) {
+	private static Ops GetOpType(int instructionCode) {
 		String[] input = GetRegisters(instructions.get(instructionCode));
 		return Ops.valueOf(input[0]);
 	}
 
-	private OpTypes GetOpTypeGroup(int instructionCode) {
+	private static OpTypes GetOpTypeGroup(int instructionCode) {
 		Ops op = GetOpType(instructionCode);
 		OpTypes opType = null;
 		switch (op) {
@@ -792,8 +796,7 @@ public class MIPSsim {
 	 * 
 	 * @param instructionCode
 	 */
-	private void ReserveResources(int instructionCode) {
-
+	private static void ReserveResources(int instructionCode) {
 		String[] input = GetRegisters(instructions.get(instructionCode));
 		if (input[1] != null) {
 			isRegisterWrite.put(input[0], true);
@@ -806,7 +809,7 @@ public class MIPSsim {
 
 	}
 
-	private String[] GetRegisters(String instruction) {
+	private static String[] GetRegisters(String instruction) {
 
 		String[] output = new String[4];
 
@@ -858,7 +861,7 @@ public class MIPSsim {
 		return output;
 	}
 
-	private boolean HasHazard(int instructionCode) {
+	private static boolean HasHazard(int instructionCode) {
 		// RAW -WAW Hazard
 		String[] input = GetRegisters(instructions.get(instructionCode));
 		if (input[1] != null) {
