@@ -25,12 +25,8 @@ public class MIPSsim {
 	private static int postMemQueue = -1;
 	private static int postAluQueue = -1;
 	private static int preMemQueue = -1;
-	private static int[] preAluQueue = { -1, -1 };
-	private static int preAluQueueSize = 0;
-	private static int preAluQueueHead = 0;
-	private static int preAluQueueTail = 1;
+	private static ArrayList<Integer> preAluQueue = new ArrayList<Integer>(2);
 	private static ArrayList<Integer> preIssueQueue = new ArrayList<>(4);
-	private static int preIssueQueueSize = 0;
 	private static boolean preAluHasCapacity = true;
 
 	private static HashMap<String, Boolean> isRegisterRead = new HashMap<>(32);
@@ -39,8 +35,7 @@ public class MIPSsim {
 	static int waitingInstruction = -1;
 	static int executedInstruction = -1;
 
-	static String branchDependency1 = null;
-	static String branchDependency2 = null;
+	static ArrayList<String> branchDependencies = new ArrayList<>();
 
 	/*************************************************************************/
 
@@ -95,26 +90,50 @@ public class MIPSsim {
 	private static void Simulator() {
 		int cycle = 1;
 		int counter = 128;
-		while (true) {
+		// TODO remove cycle count check below
+		while (true && cycle < 50) {
 			String instruction = instructions.get(counter);
+			counter = Pipeline(counter);
 			String simulation = "--------------------\nCycle:" + cycle;
 			simulation += "\n\nIF Unit:";
-			simulation += "\n\tWaiting Instruction:" + instructions.get(waitingInstruction);
-			simulation += "\n\tExecuted Instruction:" + instructions.get(executedInstruction);
+			simulation += "\n\tWaiting Instruction:[" + instructions.get(waitingInstruction) + "]";
+			simulation += "\n\tExecuted Instruction:[" + instructions.get(executedInstruction) + "]";
 			simulation += "\nPre-Issue Queue:";
-			simulation += "\n\tEntry 0:[" + instructions.get(preIssueQueue.get(0)) + "]";
-			simulation += "\n\tEntry 1:[" + instructions.get(preIssueQueue.get(1)) + "]";
-			simulation += "\n\tEntry 2:[" + instructions.get(preIssueQueue.get(2)) + "]";
-			simulation += "\n\tEntry 3:[" + instructions.get(preIssueQueue.get(3)) + "]";
+			if (preIssueQueue.size() > 0) {
+				simulation += "\n\tEntry 0:[" + instructions.get(preIssueQueue.get(0)) + "]";
+			} else {
+				simulation += "\n\tEntry 0:";
+			}
+			if (preIssueQueue.size() > 1) {
+				simulation += "\n\tEntry 1:[" + instructions.get(preIssueQueue.get(1)) + "]";
+			} else {
+				simulation += "\n\tEntry 1:";
+			}
+			if (preIssueQueue.size() > 2) {
+				simulation += "\n\tEntry 2:[" + instructions.get(preIssueQueue.get(2)) + "]";
+			} else {
+				simulation += "\n\tEntry 2:";
+			}
+			if (preIssueQueue.size() > 3) {
+				simulation += "\n\tEntry 3:[" + instructions.get(preIssueQueue.get(3)) + "]";
+			} else {
+				simulation += "\n\tEntry 3:";
+			}
 			simulation += "\nPre-ALU Queue:";
-			simulation += "\n\tEntry 0:[" + instructions.get(preAluQueue[preAluQueueHead]) + "]";
-			simulation += "\n\tEntry 1:[" + instructions.get(preAluQueue[preAluQueueTail]) + "]";
-			simulation += "\nPre-MEM Queue:" + instructions.get(preMemQueue);
-			simulation += "\nPost-MEM Queue:" + instructions.get(postMemQueue);
-			simulation += "\nPost-ALU Queue:" + instructions.get(postAluQueue);
+			if (preAluQueue.size() > 0) {
+				simulation += "\n\tEntry 0:[" + instructions.get(preAluQueue.get(0)) + "]";
+			} else {
+				simulation += "\n\tEntry 0:";
+			}
+			if (preAluQueue.size() > 1) {
+				simulation += "\n\tEntry 1:[" + instructions.get(preAluQueue.get(1)) + "]";
+			} else {
+				simulation += "\n\tEntry 1:";
+			}
+			simulation += "\nPre-MEM Queue:[" + instructions.get(preMemQueue) + "]";
+			simulation += "\nPost-MEM Queue:[" + instructions.get(postMemQueue) + "]";
+			simulation += "\nPost-ALU Queue:[" + instructions.get(postAluQueue) + "]";
 			simulation += "\n\nRegisters";
-
-			counter = Pipeline(counter);
 			for (int i = 0; i <= 24; i += 8) {
 				String regNo = String.valueOf(i);
 				if (regNo.length() == 1)
@@ -529,112 +548,95 @@ public class MIPSsim {
 	private static int PreIssueInsert(int instOne) {
 		int nextCounter = instOne;
 		int instTwo = instOne + 4;
-
-		if (waitingInstruction == -1 && executedInstruction != -1) {
-
-			String[] ins = (instructions.get(executedInstruction).split(" "));
-			Ops ops = Ops.valueOf(ins[0]);
-			String rs, rt, ii;
-			switch (ops) {
-			case BEQ:
-				rs = ins[1].replace(",", "");
-				rt = ins[2].replace(",", "");
-				ii = ins[3].replace("#", "");
-				if (registers.get(rt) == registers.get(rs)) {
-					nextCounter = nextCounter + 4 + Integer.parseInt(ii);
-				} else
-					nextCounter += 4;
-				break;
-			case BGTZ:
-				rs = ins[1].replace(",", "");
-				ii = ins[2].replace("#", "");
-				if (registers.get(rs) > 0) {
-					nextCounter = nextCounter + 4 + Integer.parseInt(ii);
-				} else
-					nextCounter += 4;
-				break;
-			default:
-				break;
+		if (waitingInstruction != -1 || executedInstruction != -1) {
+			if (waitingInstruction == -1) {
+				String[] ins = (instructions.get(executedInstruction).split(" "));
+				Ops ops = Ops.valueOf(ins[0]);
+				String rs, rt, ii;
+				switch (ops) {
+				case BEQ:
+					rs = ins[1].replace(",", "");
+					rt = ins[2].replace(",", "");
+					ii = ins[3].replace("#", "");
+					if (registers.get(rt) == registers.get(rs)) {
+						nextCounter = nextCounter + 4 + Integer.parseInt(ii);
+					} else
+						nextCounter += 4;
+					break;
+				case BGTZ:
+					rs = ins[1].replace(",", "");
+					ii = ins[2].replace("#", "");
+					if (registers.get(rs) > 0) {
+						nextCounter = nextCounter + 4 + Integer.parseInt(ii);
+					} else
+						nextCounter += 4;
+					break;
+				default:
+					break;
+				}
+				executedInstruction = -1;
 			}
 
-			executedInstruction = -1;
-		}
-		if (waitingInstruction != -1) {
-			if (branchDependency1 != null && !isRegisterWrite.get(branchDependency1)) {
-				branchDependency1 = null;
+			else if (waitingInstruction != -1) {
+				if (!HasHazard(instOne) && !HasLocalHazard(preIssueQueue.size())) {
+					executedInstruction = waitingInstruction;
+					waitingInstruction = -1;
+				}
 			}
-			if (branchDependency2 != null && !isRegisterWrite.get(branchDependency2)) {
-				branchDependency2 = null;
-			}
-			if (branchDependency1 == null && branchDependency2 == null) {
-				executedInstruction = waitingInstruction;
-				waitingInstruction = -1;
-			}
-		} else if (preIssueQueueSize < 3) {
+
+		} else if (preIssueQueue.size() < 3) {
 			Ops op1 = GetOpType(instOne);
 			Ops op2 = null;
-			if (instructions.contains(instTwo)) {
+			if (instructions.containsKey(instTwo)) {
 				op2 = GetOpType(instTwo);
 			}
 			if (op1.equals(Ops.BEQ) || op1.equals(Ops.BGTZ)) {
-				String[] input = GetRegisters(instructions.get(instOne));
-				if (isRegisterWrite.get(input[2])) {
-					branchDependency1 = input[2];
-				}
-				if (isRegisterWrite.get(input[3])) {
-					branchDependency2 = input[3];
-				}
 				waitingInstruction = instOne;
-				nextCounter = instOne + 4;
+				nextCounter = instOne;
 			} else if (op1.equals(Ops.J)) {
 				String ii = instructions.get(instOne).split(" ")[1].replace("#", "");
 				nextCounter = Integer.parseInt(ii);
 			} else if (op1.equals(Ops.BREAK)) {
 				return nextCounter;
-			}
-			if (op2 != null) {
-				if (op2.equals(Ops.BEQ) || op2.equals(Ops.BGTZ)) {
-					String[] input = GetRegisters(instructions.get(instTwo));
-					if (isRegisterWrite.get(input[2])) {
-						branchDependency1 = input[2];
-					}
-					if (isRegisterWrite.get(input[3])) {
-						branchDependency2 = input[3];
-					}
-					waitingInstruction = instTwo;
-					nextCounter = instTwo + 4;
-				} else if (op2.equals(Ops.J)) {
+			} else {
+				preIssueQueue.add(instOne);
 
-					String ii = instructions.get(instTwo).split(" ")[1].replace("#", "");
-					nextCounter = Integer.parseInt(ii);
-				} else if (op2.equals(Ops.BREAK)) {
-					return nextCounter += 4;
-				} else
-					nextCounter = instTwo + 4;
+				if (op2 != null) {
+					if (op2.equals(Ops.BEQ) || op2.equals(Ops.BGTZ)) {
+						waitingInstruction = instTwo;
+						nextCounter = instTwo;
+					} else if (op2.equals(Ops.J)) {
+						String ii = instructions.get(instTwo).split(" ")[1].replace("#", "");
+						nextCounter = Integer.parseInt(ii);
+					} else if (op2.equals(Ops.BREAK)) {
+						return nextCounter;
+					} else {
+						nextCounter = instTwo + 4;
+						preIssueQueue.add(instTwo);
+					}
+				}
 			}
-			preIssueQueue.add(instOne);
-			preIssueQueue.add(instTwo);
 		}
 		return nextCounter;
 	}
 
 	/**
-	 * Move from PreIssue to PreALU. Checks for Hazards here Check preAlucache
-	 * Was free last time
+	 * Move from PreIssue to PreALU.
 	 */
 	private static void PreIssueMove() {
 		if (preAluHasCapacity) {
 			int counter = 0;
-			while (counter < preIssueQueueSize && preAluQueueSize < 2) {
+			ArrayList<Integer> indexToRemove = new ArrayList<>();
+			while (counter < preIssueQueue.size() && preAluQueue.size() <= 2) {
 				if (!HasHazard(preIssueQueue.get(counter)) && !HasLocalHazard(counter)) {
 					Ops op = GetOpType(preIssueQueue.get(counter));
-					if (!op.equals(Ops.J)) {
+					if (!op.equals(Ops.BEQ) && !op.equals(Ops.BGTZ) && !op.equals(Ops.J)) {
 						ReserveResources(preIssueQueue.get(counter));
-						preAluQueue[preAluQueueTail] = preIssueQueue.get(counter);
-						preIssueQueue.remove(counter);
-						preAluQueueSize += 1;
+						preAluQueue.add(preIssueQueue.get(counter));
+						indexToRemove.add(counter);
+						// preIssueQueue.remove(counter);
 
-					} else {
+					} else if (op.equals(Ops.J)) {
 						Decode(instructions.get(preIssueQueue.get(counter)), 0);
 						break;
 					}
@@ -642,77 +644,29 @@ public class MIPSsim {
 				}
 				counter++;
 			}
-		}
-	}
-
-	private static boolean HasLocalHazard(int counter) {
-		HashMap<String, Boolean> isLocalRegisterRead = new HashMap<>();
-		HashMap<String, Boolean> isLocalRegisterWrite = new HashMap<>();
-		boolean hasStore = false;
-		for (int i = 0; i < counter; i++) {
-			String[] input = GetRegisters(instructions.get(preIssueQueue.get(i)));
-			if (Ops.valueOf(input[0]).equals(Ops.SW)) {
-				hasStore = true;
-			}
-			if (input[1] != null) {
-				isLocalRegisterWrite.put(input[0], true);
-			}
-			for (int j = 2; j < 4; i++) {
-				if (input[j] != null) {
-					isLocalRegisterRead.put(input[j], true);
-				}
+			for (int i = indexToRemove.size() - 1; i >= 0; i--) {
+				preIssueQueue.remove(i);
 			}
 		}
-		String[] input = GetRegisters(instructions.get(preIssueQueue.get(counter)));
-		if ((Ops.valueOf(input[0]).equals(Ops.LW) || Ops.valueOf(input[0]).equals(Ops.SW)) && hasStore) {
-			return true;
-		}
-		if (input[1] != null) {
-			if (isLocalRegisterWrite.get(input[1])) {
-				return true;
-			}
-		}
-		if (input[2] != null) {
-			if (isLocalRegisterWrite.get(input[2])) {
-				return true;
-			}
-		}
-		if (input[3] != null) {
-			if (isLocalRegisterWrite.get(input[3])) {
-				return true;
-			}
-		}
-		// WAR Hazard
-		if (input[1] != null) {
-			if (isLocalRegisterRead.get(input[1])) {
-				return true;
-			}
-		}
-
-		return false;
 	}
 
 	/**
-	 * Move from PreIssue to PreALU
+	 * Move from PreALU to PostALU
 	 */
 	private static void PreAluMove() {
-		if (preAluQueueSize > 0) {
-			if (preAluQueueSize == 2) {
+		if (preAluQueue.size() > 0) {
+			if (preAluQueue.size() == 2) {
 				preAluHasCapacity = false;
 			} else {
 				preAluHasCapacity = true;
 			}
-			OpTypes op = GetOpTypeGroup(preAluQueue[preAluQueueHead]);
+			OpTypes op = GetOpTypeGroup(preAluQueue.get(0));
 			if (op.equals(OpTypes.CALC) && postAluQueue == -1) {
-				postAluQueue = preAluQueue[preAluQueueHead];
-				preAluQueue[preAluQueueHead] = -1;
-				preAluQueueHead = (preAluQueueHead + 1) % 2;
-				preAluQueueSize -= 1;
+				postAluQueue = preAluQueue.get(0);
+				preAluQueue.remove(0);
 			} else if (op.equals(OpTypes.LDSW) && preMemQueue == -1) {
-				preMemQueue = preAluQueue[preAluQueueHead];
-				preAluQueue[preAluQueueHead] = -1;
-				preAluQueueHead = (preAluQueueHead + 1) % 2;
-				preAluQueueSize -= 1;
+				preMemQueue = preAluQueue.get(0);
+				preAluQueue.remove(0);
 			}
 		}
 	}
@@ -744,7 +698,6 @@ public class MIPSsim {
 	}
 
 	private static void WriteBack(int instructionCode) {
-		// TODO Call Decode here , might be required elsewhere
 		FreeRegisters(instructionCode);
 		Decode(instructions.get(instructionCode), 0);
 
@@ -759,7 +712,7 @@ public class MIPSsim {
 			isRegisterRead.put(input[2], false);
 		}
 		if (input[3] != null) {
-			isRegisterWrite.put(input[3], false);
+			isRegisterRead.put(input[3], false);
 		}
 
 	}
@@ -799,7 +752,7 @@ public class MIPSsim {
 	private static void ReserveResources(int instructionCode) {
 		String[] input = GetRegisters(instructions.get(instructionCode));
 		if (input[1] != null) {
-			isRegisterWrite.put(input[0], true);
+			isRegisterWrite.put(input[1], true);
 		}
 		for (int i = 2; i < 4; i++) {
 			if (input[i] != null) {
@@ -865,26 +818,75 @@ public class MIPSsim {
 		// RAW -WAW Hazard
 		String[] input = GetRegisters(instructions.get(instructionCode));
 		if (input[1] != null) {
-			if (isRegisterWrite.get(input[1])) {
+			if (isRegisterWrite.containsKey(input[1]) && isRegisterWrite.get(input[1])) {
 				return true;
 			}
 		}
 		if (input[2] != null) {
-			if (isRegisterWrite.get(input[2])) {
+			if (isRegisterWrite.containsKey(input[2]) && isRegisterWrite.get(input[2])) {
 				return true;
 			}
 		}
 		if (input[3] != null) {
-			if (isRegisterWrite.get(input[3])) {
+			if (isRegisterWrite.containsKey(input[3]) && isRegisterWrite.get(input[3])) {
 				return true;
 			}
 		}
 		// WAR Hazard
 		if (input[1] != null) {
-			if (isRegisterRead.get(input[1])) {
+			if (isRegisterRead.containsKey(input[1]) && isRegisterRead.get(input[1])) {
 				return true;
 			}
 		}
+		return false;
+	}
+
+	private static boolean HasLocalHazard(int counter) {
+		HashMap<String, Boolean> isLocalRegisterRead = new HashMap<>();
+		HashMap<String, Boolean> isLocalRegisterWrite = new HashMap<>();
+		boolean hasStore = false;
+		for (int i = 0; i < counter; i++) {
+			String[] input = GetRegisters(instructions.get(preIssueQueue.get(i)));
+			if (Ops.valueOf(input[0]).equals(Ops.SW)) {
+				hasStore = true;
+			}
+			if (input[1] != null) {
+				isLocalRegisterWrite.put(input[0], true);
+			}
+			for (int j = 2; j < 4; j++) {
+				if (input[j] != null) {
+					isLocalRegisterRead.put(input[j], true);
+				}
+			}
+		}
+		if (preIssueQueue.size() > counter) {
+			String[] input = GetRegisters(instructions.get(preIssueQueue.get(counter)));
+			if ((Ops.valueOf(input[0]).equals(Ops.LW) || Ops.valueOf(input[0]).equals(Ops.SW)) && hasStore) {
+				return true;
+			}
+			if (input[1] != null) {
+				if (isLocalRegisterWrite.containsKey(input[1]) && isLocalRegisterWrite.get(input[1])) {
+					return true;
+				}
+			}
+			if (input[2] != null) {
+				if (isLocalRegisterWrite.containsKey(input[2]) && isLocalRegisterWrite.get(input[2])) {
+					return true;
+				}
+			}
+			if (input[3] != null) {
+				if (isLocalRegisterWrite.containsKey(input[3]) && isLocalRegisterWrite.get(input[3])) {
+					return true;
+				}
+			}
+			// WAR Hazard
+			if (input[1] != null) {
+				if (isLocalRegisterWrite.containsKey(input[1]) && isLocalRegisterWrite.get(input[1])) {
+					return true;
+				}
+			}
+		}
+
 		return false;
 	}
 }
