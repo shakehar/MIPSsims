@@ -28,7 +28,8 @@ public class MIPSsim {
 	private static ArrayList<Integer> preAluQueue = new ArrayList<Integer>(2);
 	private static ArrayList<Integer> preIssueQueue = new ArrayList<>(4);
 	private static boolean preAluHasCapacity = true;
-
+	private static int preIssueCapacity;
+	private static int tempInstruction = -1;
 	private static HashMap<String, Boolean> isRegisterRead = new HashMap<>(32);
 	private static HashMap<String, Boolean> isRegisterWrite = new HashMap<>(32);
 
@@ -96,8 +97,16 @@ public class MIPSsim {
 			counter = Pipeline(counter);
 			String simulation = "--------------------\nCycle:" + cycle;
 			simulation += "\n\nIF Unit:";
-			simulation += "\n\tWaiting Instruction:[" + instructions.get(waitingInstruction) + "]";
-			simulation += "\n\tExecuted Instruction:[" + instructions.get(executedInstruction) + "]";
+			if (waitingInstruction > -1) {
+				simulation += "\n\tWaiting Instruction:[" + instructions.get(waitingInstruction) + "]";
+			} else {
+				simulation += "\n\tWaiting Instruction:";
+			}
+			if (executedInstruction > -1) {
+				simulation += "\n\tExecuted Instruction:[" + instructions.get(executedInstruction) + "]";
+			} else {
+				simulation += "\n\tExecuted Instruction:";
+			}
 			simulation += "\nPre-Issue Queue:";
 			if (preIssueQueue.size() > 0) {
 				simulation += "\n\tEntry 0:[" + instructions.get(preIssueQueue.get(0)) + "]";
@@ -130,9 +139,21 @@ public class MIPSsim {
 			} else {
 				simulation += "\n\tEntry 1:";
 			}
-			simulation += "\nPre-MEM Queue:[" + instructions.get(preMemQueue) + "]";
-			simulation += "\nPost-MEM Queue:[" + instructions.get(postMemQueue) + "]";
-			simulation += "\nPost-ALU Queue:[" + instructions.get(postAluQueue) + "]";
+			if (preMemQueue > -1) {
+				simulation += "\nPre-MEM Queue:[" + instructions.get(preMemQueue) + "]";
+			} else {
+				simulation += "\nPre-MEM Queue:";
+			}
+			if (postMemQueue > -1) {
+				simulation += "\nPost-MEM Queue:[" + instructions.get(postMemQueue) + "]";
+			} else {
+				simulation += "\nPost-MEM Queue:";
+			}
+			if (postAluQueue > -1) {
+				simulation += "\nPost-ALU Queue:[" + instructions.get(postAluQueue) + "]";
+			} else {
+				simulation += "\nPost-ALU Queue:";
+			}
 			simulation += "\n\nRegisters";
 			for (int i = 0; i <= 24; i += 8) {
 				String regNo = String.valueOf(i);
@@ -153,7 +174,7 @@ public class MIPSsim {
 			}
 			if (!instruction.equals("BREAK"))
 				simulation += "\n";
-			System.out.println(simulation);
+			System.out.print(simulation);
 			simulationOutput.add(simulation);
 			if (instruction.equals("BREAK"))
 				break;
@@ -575,16 +596,18 @@ public class MIPSsim {
 					break;
 				}
 				executedInstruction = -1;
-			}
-
-			else if (waitingInstruction != -1) {
+			} else if (waitingInstruction != -1) {
 				if (!HasHazard(instOne) && !HasLocalHazard(preIssueQueue.size())) {
-					executedInstruction = waitingInstruction;
-					waitingInstruction = -1;
+					if (tempInstruction > -1) {
+						executedInstruction = waitingInstruction;
+						waitingInstruction = -1;
+						tempInstruction = -1;
+					} else {
+						tempInstruction++;
+					}
 				}
 			}
-
-		} else if (preIssueQueue.size() < 3) {
+		} else if (preIssueCapacity > 0) {
 			Ops op1 = GetOpType(instOne);
 			Ops op2 = null;
 			if (instructions.containsKey(instTwo)) {
@@ -600,21 +623,21 @@ public class MIPSsim {
 				return nextCounter;
 			} else {
 				preIssueQueue.add(instOne);
-
-				if (op2 != null) {
-					if (op2.equals(Ops.BEQ) || op2.equals(Ops.BGTZ)) {
-						waitingInstruction = instTwo;
-						nextCounter = instTwo;
-					} else if (op2.equals(Ops.J)) {
-						String ii = instructions.get(instTwo).split(" ")[1].replace("#", "");
-						nextCounter = Integer.parseInt(ii);
-					} else if (op2.equals(Ops.BREAK)) {
-						return nextCounter;
-					} else {
-						nextCounter = instTwo + 4;
-						preIssueQueue.add(instTwo);
+				if (preIssueCapacity >= 2)
+					if (op2 != null) {
+						if (op2.equals(Ops.BEQ) || op2.equals(Ops.BGTZ)) {
+							waitingInstruction = instTwo;
+							nextCounter = instTwo;
+						} else if (op2.equals(Ops.J)) {
+							String ii = instructions.get(instTwo).split(" ")[1].replace("#", "");
+							nextCounter = Integer.parseInt(ii);
+						} else if (op2.equals(Ops.BREAK)) {
+							return nextCounter;
+						} else {
+							nextCounter = instTwo + 4;
+							preIssueQueue.add(instTwo);
+						}
 					}
-				}
 			}
 		}
 		return nextCounter;
@@ -624,6 +647,7 @@ public class MIPSsim {
 	 * Move from PreIssue to PreALU.
 	 */
 	private static void PreIssueMove() {
+		preIssueCapacity = 4 - preIssueQueue.size();
 		if (preAluHasCapacity) {
 			int counter = 0;
 			ArrayList<Integer> indexToRemove = new ArrayList<>();
@@ -881,7 +905,7 @@ public class MIPSsim {
 			}
 			// WAR Hazard
 			if (input[1] != null) {
-				if (isLocalRegisterWrite.containsKey(input[1]) && isLocalRegisterWrite.get(input[1])) {
+				if (isLocalRegisterRead.containsKey(input[1]) && isLocalRegisterRead.get(input[1])) {
 					return true;
 				}
 			}
