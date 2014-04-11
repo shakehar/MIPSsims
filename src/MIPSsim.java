@@ -37,6 +37,7 @@ public class MIPSsim {
 	static int executedInstruction = -1;
 
 	static ArrayList<String> branchDependencies = new ArrayList<>();
+	private static boolean isBranchClear = true;
 
 	/*************************************************************************/
 
@@ -569,39 +570,19 @@ public class MIPSsim {
 	private static int PreIssueInsert(int instOne) {
 		int nextCounter = instOne;
 		int instTwo = instOne + 4;
+		if (waitingInstruction == -1) {
+			executedInstruction = -1;
+		}
 		if (waitingInstruction != -1 || executedInstruction != -1) {
 			if (waitingInstruction == -1) {
-				String[] ins = (instructions.get(executedInstruction).split(" "));
-				Ops ops = Ops.valueOf(ins[0]);
-				String rs, rt, ii;
-				switch (ops) {
-				case BEQ:
-					rs = ins[1].replace(",", "");
-					rt = ins[2].replace(",", "");
-					ii = ins[3].replace("#", "");
-					if (registers.get(rt) == registers.get(rs)) {
-						nextCounter = nextCounter + 4 + Integer.parseInt(ii);
-					} else
-						nextCounter += 4;
-					break;
-				case BGTZ:
-					rs = ins[1].replace(",", "");
-					ii = ins[2].replace("#", "");
-					if (registers.get(rs) > 0) {
-						nextCounter = nextCounter + 4 + Integer.parseInt(ii);
-					} else
-						nextCounter += 4;
-					break;
-				default:
-					break;
-				}
 				executedInstruction = -1;
 			} else if (waitingInstruction != -1) {
-				if (!HasHazard(instOne) && !HasLocalHazard(preIssueQueue.size())) {
+				if (!HasHazard(instOne - 4) && !HasLocalHazard(preIssueQueue.size(), instOne - 4)) {
 					if (tempInstruction > -1) {
 						executedInstruction = waitingInstruction;
 						waitingInstruction = -1;
 						tempInstruction = -1;
+						nextCounter = CalculateBranchAddress(executedInstruction);
 					} else {
 						tempInstruction++;
 					}
@@ -615,7 +596,7 @@ public class MIPSsim {
 			}
 			if (op1.equals(Ops.BEQ) || op1.equals(Ops.BGTZ)) {
 				waitingInstruction = instOne;
-				nextCounter = instOne;
+				nextCounter = instOne + 4;
 			} else if (op1.equals(Ops.J)) {
 				String ii = instructions.get(instOne).split(" ")[1].replace("#", "");
 				nextCounter = Integer.parseInt(ii);
@@ -623,11 +604,12 @@ public class MIPSsim {
 				return nextCounter;
 			} else {
 				preIssueQueue.add(instOne);
+				nextCounter += 4;
 				if (preIssueCapacity >= 2)
 					if (op2 != null) {
 						if (op2.equals(Ops.BEQ) || op2.equals(Ops.BGTZ)) {
 							waitingInstruction = instTwo;
-							nextCounter = instTwo;
+							nextCounter = instTwo + 4;
 						} else if (op2.equals(Ops.J)) {
 							String ii = instructions.get(instTwo).split(" ")[1].replace("#", "");
 							nextCounter = Integer.parseInt(ii);
@@ -643,16 +625,53 @@ public class MIPSsim {
 		return nextCounter;
 	}
 
+	private static int CalculateBranchAddress(int instructionCode) {
+		int nextCounter = instructionCode;// - 4;
+		String[] ins = (instructions.get(executedInstruction).split(" "));
+		Ops ops = Ops.valueOf(ins[0]);
+		String rs, rt, ii;
+		switch (ops) {
+		case BEQ:
+			rs = ins[1].replace(",", "");
+			rt = ins[2].replace(",", "");
+			ii = ins[3].replace("#", "");
+			if (registers.get(rt) == registers.get(rs)) {
+				nextCounter = nextCounter + 4 + Integer.parseInt(ii);
+			} else {
+				nextCounter += 4;
+			}
+			break;
+		case BGTZ:
+			rs = ins[1].replace(",", "");
+			ii = ins[2].replace("#", "");
+			if (registers.get(rs) > 0) {
+				nextCounter = nextCounter + 4 + Integer.parseInt(ii);
+			} else {
+				nextCounter += 4;
+			}
+			break;
+		default:
+			break;
+		}
+		return nextCounter;
+
+	}
+
 	/**
 	 * Move from PreIssue to PreALU.
 	 */
 	private static void PreIssueMove() {
 		preIssueCapacity = 4 - preIssueQueue.size();
+		if (executedInstruction == -1 && waitingInstruction == -1) {
+			isBranchClear = true;
+		} else {
+			isBranchClear = false;
+		}
 		if (preAluHasCapacity) {
 			int counter = 0;
 			ArrayList<Integer> indexToRemove = new ArrayList<>();
 			while (counter < preIssueQueue.size() && preAluQueue.size() <= 2) {
-				if (!HasHazard(preIssueQueue.get(counter)) && !HasLocalHazard(counter)) {
+				if (!HasHazard(preIssueQueue.get(counter)) && !HasLocalHazard(counter, preIssueQueue.get(counter))) {
 					Ops op = GetOpType(preIssueQueue.get(counter));
 					if (!op.equals(Ops.BEQ) && !op.equals(Ops.BGTZ) && !op.equals(Ops.J)) {
 						ReserveResources(preIssueQueue.get(counter));
@@ -865,7 +884,7 @@ public class MIPSsim {
 		return false;
 	}
 
-	private static boolean HasLocalHazard(int counter) {
+	private static boolean HasLocalHazard(int counter, int instructionCounter) {
 		HashMap<String, Boolean> isLocalRegisterRead = new HashMap<>();
 		HashMap<String, Boolean> isLocalRegisterWrite = new HashMap<>();
 		boolean hasStore = false;
@@ -875,7 +894,7 @@ public class MIPSsim {
 				hasStore = true;
 			}
 			if (input[1] != null) {
-				isLocalRegisterWrite.put(input[0], true);
+				isLocalRegisterWrite.put(input[1], true);
 			}
 			for (int j = 2; j < 4; j++) {
 				if (input[j] != null) {
@@ -883,8 +902,8 @@ public class MIPSsim {
 				}
 			}
 		}
-		if (preIssueQueue.size() > counter) {
-			String[] input = GetRegisters(instructions.get(preIssueQueue.get(counter)));
+		if (preIssueQueue.size() >= counter) {
+			String[] input = GetRegisters(instructions.get(instructionCounter));
 			if ((Ops.valueOf(input[0]).equals(Ops.LW) || Ops.valueOf(input[0]).equals(Ops.SW)) && hasStore) {
 				return true;
 			}
@@ -909,6 +928,8 @@ public class MIPSsim {
 					return true;
 				}
 			}
+
+			// Test for BGTZ
 		}
 
 		return false;
