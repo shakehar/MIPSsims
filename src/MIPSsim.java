@@ -32,12 +32,13 @@ public class MIPSsim {
 	private static int tempInstruction = -1;
 	private static HashMap<String, Boolean> isRegisterRead = new HashMap<>(32);
 	private static HashMap<String, Boolean> isRegisterWrite = new HashMap<>(32);
+	private static ArrayList<Integer> writeDependencyRemove = new ArrayList<Integer>(2);
+	private static ArrayList<Integer> readDependencyRemove = new ArrayList<Integer>(2);
 
 	static int waitingInstruction = -1;
 	static int executedInstruction = -1;
 
 	static ArrayList<String> branchDependencies = new ArrayList<>();
-	private static boolean isBranchClear = true;
 
 	/*************************************************************************/
 
@@ -92,8 +93,7 @@ public class MIPSsim {
 	private static void Simulator() {
 		int cycle = 1;
 		int counter = 128;
-		// TODO remove cycle count check below
-		while (true && cycle < 50) {
+		while (true) {
 			String instruction = instructions.get(counter);
 			counter = Pipeline(counter);
 			String simulation = "--------------------\nCycle:" + cycle;
@@ -558,6 +558,8 @@ public class MIPSsim {
 	/*******************************************************************************************************************************/
 
 	public static int Pipeline(int counter) {
+		FreeWriteRegisters();
+		// FreeReadRegisters();
 		PostMemMove();
 		PostALUMove();
 		PreMemMove();
@@ -578,14 +580,10 @@ public class MIPSsim {
 				executedInstruction = -1;
 			} else if (waitingInstruction != -1) {
 				if (!HasHazard(instOne - 4) && !HasLocalHazard(preIssueQueue.size(), instOne - 4)) {
-					if (tempInstruction > -1) {
-						executedInstruction = waitingInstruction;
-						waitingInstruction = -1;
-						tempInstruction = -1;
-						nextCounter = CalculateBranchAddress(executedInstruction);
-					} else {
-						tempInstruction++;
-					}
+					executedInstruction = waitingInstruction;
+					waitingInstruction = -1;
+					// tempInstruction = -1;
+					nextCounter = CalculateBranchAddress(executedInstruction);
 				}
 			}
 		} else if (preIssueCapacity > 0) {
@@ -598,6 +596,7 @@ public class MIPSsim {
 				waitingInstruction = instOne;
 				nextCounter = instOne + 4;
 			} else if (op1.equals(Ops.J)) {
+				executedInstruction = instOne;
 				String ii = instructions.get(instOne).split(" ")[1].replace("#", "");
 				nextCounter = Integer.parseInt(ii);
 			} else if (op1.equals(Ops.BREAK)) {
@@ -611,6 +610,7 @@ public class MIPSsim {
 							waitingInstruction = instTwo;
 							nextCounter = instTwo + 4;
 						} else if (op2.equals(Ops.J)) {
+							executedInstruction = instTwo;
 							String ii = instructions.get(instTwo).split(" ")[1].replace("#", "");
 							nextCounter = Integer.parseInt(ii);
 						} else if (op2.equals(Ops.BREAK)) {
@@ -662,11 +662,6 @@ public class MIPSsim {
 	 */
 	private static void PreIssueMove() {
 		preIssueCapacity = 4 - preIssueQueue.size();
-		if (executedInstruction == -1 && waitingInstruction == -1) {
-			isBranchClear = true;
-		} else {
-			isBranchClear = false;
-		}
 		if (preAluHasCapacity) {
 			int counter = 0;
 			ArrayList<Integer> indexToRemove = new ArrayList<>();
@@ -688,7 +683,7 @@ public class MIPSsim {
 				counter++;
 			}
 			for (int i = indexToRemove.size() - 1; i >= 0; i--) {
-				preIssueQueue.remove(i);
+				preIssueQueue.remove((int) indexToRemove.get(i));
 			}
 		}
 	}
@@ -707,16 +702,22 @@ public class MIPSsim {
 			if (op.equals(OpTypes.CALC) && postAluQueue == -1) {
 				postAluQueue = preAluQueue.get(0);
 				preAluQueue.remove(0);
+				FreeReadRegisters(postAluQueue);
 			} else if (op.equals(OpTypes.LDSW) && preMemQueue == -1) {
 				preMemQueue = preAluQueue.get(0);
 				preAluQueue.remove(0);
+				FreeReadRegisters(preMemQueue);
 			}
 		}
 	}
 
 	private static void PreMemMove() {
 		if (preMemQueue > 0) {
-			if (postMemQueue == -1) {
+			String[] input = GetRegisters(instructions.get(preMemQueue));
+			if (Ops.valueOf(input[0]).equals(Ops.SW)) {
+				WriteBack(preMemQueue);
+				preMemQueue = -1;
+			} else if (postMemQueue == -1) {
 				postMemQueue = preMemQueue;
 				preMemQueue = -1;
 			}
@@ -741,16 +742,24 @@ public class MIPSsim {
 	}
 
 	private static void WriteBack(int instructionCode) {
-		FreeRegisters(instructionCode);
+		writeDependencyRemove.add(instructionCode);
 		Decode(instructions.get(instructionCode), 0);
-
 	}
 
-	private static void FreeRegisters(int instructionCode) {
-		String input[] = GetRegisters(instructions.get(instructionCode));
-		if (input[1] != null) {
-			isRegisterWrite.put(input[1], false);
+	private static void FreeWriteRegisters() {
+		if (!writeDependencyRemove.isEmpty()) {
+			for (int instructionCode : writeDependencyRemove) {
+				String input[] = GetRegisters(instructions.get(instructionCode));
+				if (input[1] != null) {
+					isRegisterWrite.put(input[1], false);
+				}
+			}
+			writeDependencyRemove.clear();
 		}
+	}
+
+	private static void FreeReadRegisters(int instructionCode) {
+		String input[] = GetRegisters(instructions.get(instructionCode));
 		if (input[2] != null) {
 			isRegisterRead.put(input[2], false);
 		}
@@ -838,8 +847,11 @@ public class MIPSsim {
 			output[3] = ins[2].replace(",", "");
 			break;
 		case BGTZ:
+			output[2] = ins[1].replace(",", "");
+			break;
 		case SW:
 			output[2] = ins[1].replace(",", "");
+			output[3] = ins[2].split("\\(")[1].replace(")", "");
 			break;
 		case BREAK:
 			break;
@@ -848,6 +860,7 @@ public class MIPSsim {
 			break;
 		case LW:
 			output[1] = ins[1].replace(",", "");
+			output[2] = ins[2].split("\\(")[1].replace(")", "");
 			break;
 		default:
 			break;
