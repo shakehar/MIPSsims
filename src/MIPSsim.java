@@ -29,11 +29,9 @@ public class MIPSsim {
 	private static ArrayList<Integer> preIssueQueue = new ArrayList<>(4);
 	private static boolean preAluHasCapacity = true;
 	private static int preIssueCapacity;
-	private static int tempInstruction = -1;
 	private static HashMap<String, Boolean> isRegisterRead = new HashMap<>(32);
 	private static HashMap<String, Boolean> isRegisterWrite = new HashMap<>(32);
 	private static ArrayList<Integer> writeDependencyRemove = new ArrayList<Integer>(2);
-	private static ArrayList<Integer> readDependencyRemove = new ArrayList<Integer>(2);
 
 	static int waitingInstruction = -1;
 	static int executedInstruction = -1;
@@ -60,7 +58,7 @@ public class MIPSsim {
 		BufferedWriter bw = new BufferedWriter(fw);
 
 		for (String string : output) {
-			bw.write(string + "\n");
+			bw.write(string);
 		}
 
 		bw.close();
@@ -177,7 +175,7 @@ public class MIPSsim {
 				simulation += "\n";
 			System.out.print(simulation);
 			simulationOutput.add(simulation);
-			if (instruction.equals("BREAK"))
+			if (counter < 0)
 				break;
 			cycle++;
 		}
@@ -600,7 +598,8 @@ public class MIPSsim {
 				String ii = instructions.get(instOne).split(" ")[1].replace("#", "");
 				nextCounter = Integer.parseInt(ii);
 			} else if (op1.equals(Ops.BREAK)) {
-				return nextCounter;
+				executedInstruction = instOne;
+				return -1;
 			} else {
 				preIssueQueue.add(instOne);
 				nextCounter += 4;
@@ -614,7 +613,8 @@ public class MIPSsim {
 							String ii = instructions.get(instTwo).split(" ")[1].replace("#", "");
 							nextCounter = Integer.parseInt(ii);
 						} else if (op2.equals(Ops.BREAK)) {
-							return nextCounter;
+							executedInstruction = instTwo;
+							return -1;
 						} else {
 							nextCounter = instTwo + 4;
 							preIssueQueue.add(instTwo);
@@ -672,13 +672,10 @@ public class MIPSsim {
 						ReserveResources(preIssueQueue.get(counter));
 						preAluQueue.add(preIssueQueue.get(counter));
 						indexToRemove.add(counter);
-						// preIssueQueue.remove(counter);
-
 					} else if (op.equals(Ops.J)) {
 						Decode(instructions.get(preIssueQueue.get(counter)), 0);
 						break;
 					}
-
 				}
 				counter++;
 			}
