@@ -14,8 +14,8 @@ public class MIPSsim {
 
 	public static int memoryLocation = 124;
 	public static int breakLocation = 0;
-	public static List<String> disassemblyOutput = new ArrayList<>();
-	public static List<String> simulationOutput = new ArrayList<>();
+	public static List<String> disassemblyOutput = new ArrayList<String>();
+	public static List<String> simulationOutput = new ArrayList<String>();
 	public static Hashtable<String, Integer> registers = new Hashtable<String, Integer>();
 	public static Hashtable<Integer, Integer> memory = new Hashtable<Integer, Integer>();
 	public static Hashtable<Integer, String> instructions = new Hashtable<Integer, String>();
@@ -26,17 +26,17 @@ public class MIPSsim {
 	private static int postAluQueue = -1;
 	private static int preMemQueue = -1;
 	private static ArrayList<Integer> preAluQueue = new ArrayList<Integer>(2);
-	private static ArrayList<Integer> preIssueQueue = new ArrayList<>(4);
+	private static ArrayList<Integer> preIssueQueue = new ArrayList<Integer>(4);
 	private static boolean preAluHasCapacity = true;
 	private static int preIssueCapacity;
-	private static HashMap<String, Boolean> isRegisterRead = new HashMap<>(32);
-	private static HashMap<String, Boolean> isRegisterWrite = new HashMap<>(32);
+	private static HashMap<String, Boolean> isRegisterRead = new HashMap<String, Boolean>(32);
+	private static HashMap<String, Boolean> isRegisterWrite = new HashMap<String, Boolean>(32);
 	private static ArrayList<Integer> writeDependencyRemove = new ArrayList<Integer>(2);
 
 	static int waitingInstruction = -1;
 	static int executedInstruction = -1;
 
-	static ArrayList<String> branchDependencies = new ArrayList<>();
+	static ArrayList<String> branchDependencies = new ArrayList<String>();
 
 	/*************************************************************************/
 
@@ -171,7 +171,7 @@ public class MIPSsim {
 						simulation += "\t" + memory.get(j);
 				}
 			}
-			if (!instruction.equals("BREAK"))
+			if (!instruction.equals("BREAK") || counter > 0)
 				simulation += "\n";
 			System.out.print(simulation);
 			simulationOutput.add(simulation);
@@ -352,10 +352,10 @@ public class MIPSsim {
 	private static void ProcessCategory3(long word) {
 		long rs, rt, iv;
 		Category3OPS op;
-		rs = ((word >> 24) & 0b11111);
-		rt = (word >> 19) & 0b11111;
-		op = Category3OPS.fromByte((int) ((word >> 16) & 0b111));
-		iv = (word & 0b1111111111111111);
+		rs = ((word >> 24) & Integer.parseInt("11111", 2));
+		rt = (word >> 19) & Integer.parseInt("11111", 2);
+		op = Category3OPS.fromByte((int) ((word >> 16) & Integer.parseInt("111", 2)));
+		iv = (word & Integer.parseInt("1111111111111111", 2));
 		String disassembly = Long.toBinaryString(word) + "\t" + memoryLocation + "\t" + op.toString() + " "
 				+ RegisterName(rt) + ", " + RegisterName(rs) + ", " + HashValue(iv);
 		System.out.println(disassembly);
@@ -369,10 +369,10 @@ public class MIPSsim {
 	private static void ProcessCategory2(long word) {
 		long rs, rt, rd;
 		Category2OPS op;
-		rs = ((word >> 24) & 0b11111);
-		rt = ((word >> 19) & 0b11111);
-		op = Category2OPS.fromByte((int) ((word >> 16) & 0b111));
-		rd = ((word >> 11) & 0b11111);
+		rs = ((word >> 24) & Integer.parseInt("11111", 2));
+		rt = ((word >> 19) & Integer.parseInt("11111", 2));
+		op = Category2OPS.fromByte((int) ((word >> 16) & Integer.parseInt("111", 2)));
+		rd = ((word >> 11) & Integer.parseInt("11111", 2));
 
 		String disassembly = Long.toBinaryString(word) + "\t" + memoryLocation + "\t" + op.toString() + " "
 				+ RegisterName(rd) + ", " + RegisterName(rs) + ", " + RegisterName(rt);
@@ -393,18 +393,18 @@ public class MIPSsim {
 		while (stringWord.length() < 32)
 			stringWord = "0" + stringWord;
 		String disassembly = stringWord + "\t" + memoryLocation + "\t";
-		op = Category1OPS.fromByte((int) ((word >> 26) & 0b111));
+		op = Category1OPS.fromByte((int) ((word >> 26) & Integer.parseInt("111", 2)));
 		switch (op) {
 		case BEQ:
-			rs = (word >> 21) & 0b11111;
-			rt = (word >> 16) & 0b11111;
+			rs = (word >> 21) & Integer.parseInt("11111", 2);
+			rt = (word >> 16) & Integer.parseInt("11111", 2);
 			delaySlot = (((memoryLocation + 4) >> 28) << 28);
-			ii = (word & 0b1111111111111111) << 2;
+			ii = (word & Integer.parseInt("1111111111111111", 2)) << 2;
 			disassembly += op.toString() + " " + RegisterName(rs) + ", " + RegisterName(rt) + ", " + HashValue(ii);
 			break;
 		case BGTZ:
-			rs = (word >> 21) & 0b11111;
-			ii = (word & 0b1111111111111111) << 2;
+			rs = (word >> 21) & Integer.parseInt("11111", 2);
+			ii = (word & Integer.parseInt("1111111111111111", 2)) << 2;
 			disassembly += op.toString() + " " + RegisterName(rs) + ", " + HashValue(ii);
 			break;
 		case BREAK:
@@ -413,21 +413,21 @@ public class MIPSsim {
 			breakLocation = memoryLocation + 4;
 			break;
 		case J:
-			ii = (word << 2) & 0b11111111111111111111111111;
+			ii = (word << 2) & Integer.parseInt("11111111111111111111111111", 2);
 			delaySlot = (((memoryLocation + 4) >> 28) << 28);
 			ii = ii | delaySlot;
 			disassembly += op.toString() + " " + HashValue(ii);
 			break;
 		case LW:
-			rs = (word >> 21) & 0b11111;
-			rt = (word >> 16) & 0b11111;
-			ii = word & 0b1111111111111111;
+			rs = (word >> 21) & Integer.parseInt("11111", 2);
+			rt = (word >> 16) & Integer.parseInt("11111", 2);
+			ii = word & Integer.parseInt("1111111111111111", 2);
 			disassembly += op.toString() + " " + RegisterName(rt) + ", " + ii + "(" + RegisterName(rs) + ")";
 			break;
 		case SW:
-			rs = (word >> 21) & 0b11111;
-			rt = (word >> 16) & 0b11111;
-			ii = word & 0b1111111111111111;
+			rs = (word >> 21) & Integer.parseInt("11111", 2);
+			rt = (word >> 16) & Integer.parseInt("11111", 2);
+			ii = word & Integer.parseInt("1111111111111111", 2);
 			disassembly += op.toString() + " " + RegisterName(rt) + ", " + ii + "(" + RegisterName(rs) + ")";
 			break;
 		default:
@@ -441,15 +441,15 @@ public class MIPSsim {
 
 	private static Category GetCategory(Long word) {
 		Category cat = null;
-		int catt = (int) ((word >> 29) & 0b111);
+		int catt = (int) ((word >> 29) & Integer.parseInt("111", 2));
 
-		if (catt == 0b000) {
+		if (catt == Integer.parseInt("000", 2)) {
 			cat = Category.category1;
 		}
-		if (catt == 0b110) {
+		if (catt == Integer.parseInt("110", 2)) {
 			cat = Category.category2;
 		}
-		if (catt == 0b111) {
+		if (catt == Integer.parseInt("111", 2)) {
 			cat = Category.category3;
 		}
 		return cat;
@@ -487,7 +487,8 @@ public class MIPSsim {
 
 	enum Category1OPS {
 
-		J(0b000), BEQ(0b010), BGTZ(0b100), BREAK(0b101), SW(0b110), LW(0b111);
+		J(Integer.parseInt("000", 2)), BEQ(Integer.parseInt("010", 2)), BGTZ(Integer.parseInt("100", 2)), BREAK(Integer
+				.parseInt("101", 2)), SW(Integer.parseInt("110", 2)), LW(Integer.parseInt("111", 2));
 		private int numVal;
 
 		Category1OPS(int numVal) {
@@ -508,7 +509,9 @@ public class MIPSsim {
 	}
 
 	enum Category2OPS {
-		ADD(0b000), SUB(0b001), MUL(0b010), AND(0b011), OR(0b100), XOR(0b101), NOR(0b110);
+		ADD(Integer.parseInt("000", 2)), SUB(Integer.parseInt("001", 2)), MUL(Integer.parseInt("010", 2)), AND(Integer
+				.parseInt("011", 2)), OR(Integer.parseInt("100", 2)), XOR(Integer.parseInt("101", 2)), NOR(Integer
+				.parseInt("110", 2));
 		private int numVal;
 
 		Category2OPS(int numVal) {
@@ -529,7 +532,8 @@ public class MIPSsim {
 	}
 
 	enum Category3OPS {
-		ADDI(0b000), ANDI(0b001), ORI(0b010), XORI(0b011);
+		ADDI(Integer.parseInt("000", 2)), ANDI(Integer.parseInt("001", 2)), ORI(Integer.parseInt("010", 2)), XORI(
+				Integer.parseInt("011", 2));
 		private int numVal;
 
 		Category3OPS(int numVal) {
@@ -664,7 +668,7 @@ public class MIPSsim {
 		preIssueCapacity = 4 - preIssueQueue.size();
 		if (preAluHasCapacity) {
 			int counter = 0;
-			ArrayList<Integer> indexToRemove = new ArrayList<>();
+			ArrayList<Integer> indexToRemove = new ArrayList<Integer>();
 			while (counter < preIssueQueue.size() && preAluQueue.size() <= 2) {
 				if (!HasHazard(preIssueQueue.get(counter)) && !HasLocalHazard(counter, preIssueQueue.get(counter))) {
 					Ops op = GetOpType(preIssueQueue.get(counter));
@@ -895,8 +899,8 @@ public class MIPSsim {
 	}
 
 	private static boolean HasLocalHazard(int counter, int instructionCounter) {
-		HashMap<String, Boolean> isLocalRegisterRead = new HashMap<>();
-		HashMap<String, Boolean> isLocalRegisterWrite = new HashMap<>();
+		HashMap<String, Boolean> isLocalRegisterRead = new HashMap<String, Boolean>();
+		HashMap<String, Boolean> isLocalRegisterWrite = new HashMap<String, Boolean>();
 		boolean hasStore = false;
 		for (int i = 0; i < counter; i++) {
 			String[] input = GetRegisters(instructions.get(preIssueQueue.get(i)));
